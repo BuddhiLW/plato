@@ -24,6 +24,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: DeLaGuardo/setup-clojure@13.2
         with:
           cli: latest
