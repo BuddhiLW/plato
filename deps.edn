@@ -1,0 +1,7 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        reagent/reagent {:mvn/version "2.0.1"}}
+ :aliases
+ {:dev {:extra-paths ["examples"]}
+  :test {:extra-paths ["test" "examples"]
+         :main-opts ["-m" "plato.test-runner"]}}}

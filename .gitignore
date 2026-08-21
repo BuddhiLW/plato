@@ -1,0 +1,9 @@
+/.cpcache/
+/.shadow-cljs/
+/.nrepl-port
+/node_modules/
+/public/js/
+/public/vendor/
+/target/
+.DS_Store
+

@@ -1,0 +1,26 @@
+{
+  "name": "@buddhilw/plato",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Data-driven ClojureScript presentation engine powered by Reveal.js and Desargues scene graphs.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BuddhiLW/plato.git"
+  },
+  "scripts": {
+    "assets": "node scripts/copy-assets.mjs",
+    "dev": "npm run assets && shadow-cljs watch app",
+    "build": "npm run assets && shadow-cljs release app",
+    "test": "clojure -M:test",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "reveal.js": "6.0.1"
+  },
+  "devDependencies": {
+    "shadow-cljs": "3.4.12"
+  }
+}

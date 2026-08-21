@@ -1,0 +1,9 @@
+{:project-id "plato"
+ :description "Data-driven ClojureScript presentation engine with Reveal.js and Desargues scene-graph animation"
+ :type :library
+ :parent-id nil
+ :language :clojurescript
+ :kg-backend :datahike
+ :watch-dirs ["src" "examples" "test"]
+ :hot-reload true
+ :tags ["clojure" "clojurescript" "presentation" "reveal-js" "desargues" "animation" "svg"]}
