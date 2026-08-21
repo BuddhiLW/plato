@@ -1,8 +1,5 @@
 (ns plato.render
-  "L3-but-pure: scene nodes -> SVG hiccup (plain data, no reagent dep -> cljc,
-   runs in the browser AND server-side for snapshots). An SvgTarget record
-   implements the IRenderTarget seam by delegating to the node->hiccup
-   multimethod (OCP: a new node kind is a new defmethod)."
+  "Pure scene-graph to SVG rendering."
   (:require [plato.protocols :as p]
             [plato.color :as color]
             [plato.geometry :as geo]
@@ -29,8 +26,36 @@
   "Static SVG hiccup for a scene node (dispatch on :node)."
   (fn [_g nd] (:node nd)))
 
+(defn- layout-root-box [g]
+  (some (fn [[k value]]
+          (when (= "box" (name k)) value))
+        (:layout g)))
+
+(defn- layout-origin [g]
+  (if-let [{:keys [w h]} (layout-root-box g)]
+    [(/ (- geo/frame-w w) 2.0)
+     (/ (- geo/frame-h h) 2.0)]
+    [0.0 0.0]))
+
+(defn- point-of [g nd]
+  (if-let [{:keys [x y w h]} (:box nd)]
+    (let [[ox oy] (layout-origin g)]
+      {:x (geo/->len (+ ox x (/ w 2.0)))
+       :y (geo/->len (+ oy y (/ h 2.0)))})
+    (geo/point (sc/resolve-at g nd))))
+
+(defn- box-length [nd key option fallback]
+  (if-let [value (get-in nd [:box key])]
+    (geo/->len value)
+    (geo/->len (get-in nd [:opts option] fallback))))
+
+(defn- style-value [nd key fallback]
+  (or (get-in nd [:style key])
+      (get-in nd [:opts key])
+      fallback))
+
 (defn- circle-el [g nd]
-  (let [{:keys [x y]} (geo/point (sc/resolve-at g nd))
+  (let [{:keys [x y]} (point-of g nd)
         r (geo/->len (get-in nd [:opts :radius] 0.1))]
     [:circle (merge {:cx x :cy y :r r} (paint nd))]))
 
@@ -38,9 +63,9 @@
 (defmethod node->hiccup :dot    [g nd] (circle-el g nd))
 
 (defn- rect-el [g nd]
-  (let [{:keys [x y]} (geo/point (sc/resolve-at g nd))
-        w  (geo/->len (get-in nd [:opts :width] 1))
-        h  (geo/->len (get-in nd [:opts :height] 1))
+  (let [{:keys [x y]} (point-of g nd)
+        w  (box-length nd :w :width 1)
+        h  (box-length nd :h :height 1)
         rx (geo/->len (get-in nd [:opts :corner-radius] 0))]
     [:rect (merge {:x (- x (/ w 2)) :y (- y (/ h 2)) :width w :height h :rx rx}
                   (paint nd))]))
@@ -49,28 +74,43 @@
 (defmethod node->hiccup :rounded-rectangle [g nd] (rect-el g nd))
 
 (defn- text-el [g nd content]
-  (let [{:keys [x y]} (geo/point (sc/resolve-at g nd))
-        fs    (get-in nd [:opts :font-size] 24)
-        col   (color/hex (get-in nd [:opts :color] :white))
-        bold? (= "BOLD" (get-in nd [:opts :weight]))]
+  (let [{:keys [x y]} (point-of g nd)
+        fs    (style-value nd :font-size 24)
+        col   (color/hex (style-value nd :color :white))
+        weight (style-value nd :weight "NORMAL")
+        bold? (or (= "BOLD" weight) (= :bold weight))]
     [:text {:x x :y y :text-anchor "middle" :dominant-baseline "central"
             :font-size fs :fill col
             :font-weight (if bold? "700" "400")
             :font-family "system-ui, sans-serif"}
      content]))
 
-(defmethod node->hiccup :text [g nd] (text-el g nd (:text nd)))
+(defmethod node->hiccup :text [g nd]
+  (text-el g nd (or (:text nd) (:content nd) "")))
+
+(defmethod node->hiccup :math [g nd]
+  (text-el g nd (or (:content nd) (:text nd) "")))
+
 (defmethod node->hiccup :decimal [g nd]
   (let [dp (get-in nd [:opts :num-decimal-places] 0)]
     (text-el g nd (fmt/fixed (:value nd 0) dp))))
+
+(defmethod node->hiccup :image [g nd]
+  (let [{:keys [x y]} (point-of g nd)
+        w (box-length nd :w :width 1)
+        h (box-length nd :h :height 1)]
+    [:image {:href (:content nd)
+             :x (- x (/ w 2.0))
+             :y (- y (/ h 2.0))
+             :width w
+             :height h
+             :preserveAspectRatio "xMidYMid meet"}]))
 
 (defmethod node->hiccup :default [_g nd]
   [:g {:data-unknown (str (:node nd))}])
 
 ;; ── animated-attrs -> SVG (the IRenderTarget/-apply seam made real) ─────────
-;; Stratified low -> high: pivots & string builders -> channel mergers ->
-;; apply-attrs. -sample speaks in semantic channels; this layer is the ONLY
-;; place that knows their SVG spelling.
+;; Animated channels are translated to SVG attributes here.
 
 (defn- center-of
   "Element pivot [cx cy] in SVG px, for scale-about-center."
@@ -79,6 +119,8 @@
     :circle [(:cx a) (:cy a)]
     :rect   [(+ (:x a) (/ (:width a) 2.0)) (+ (:y a) (/ (:height a) 2.0))]
     :text   [(:x a) (:y a)]
+    :image  [(+ (:x a) (/ (:width a) 2.0))
+             (+ (:y a) (/ (:height a) 2.0))]
     [0 0]))
 
 (defn- translate-str [[dx dy]] (str "translate(" dx "," dy ")"))

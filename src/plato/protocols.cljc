@@ -1,17 +1,13 @@
 (ns plato.protocols
-  "SOLID seams (ISP): rendering targets, tweens, playback and slide navigation
-   are separate protocols so partial impls and alternate targets compose
-   (DIP/OCP/LSP) — mirrors desargues.scene.protocols on the render side.")
+  "Rendering, tween, playback, and deck protocols.")
 
 (defprotocol IRenderTarget
-  "A surface that turns a scene node into a visual element and applies animated
-   attrs to it. DIP seam: SVG-hiccup target now, a headless test target later."
+  "Turns scene nodes into visual elements and applies animated attributes."
   (-element [target g node] "Static visual element (hiccup) for a node.")
   (-apply [target el attrs] "Return `el` with animated attrs merged in."))
 
 (defprotocol ITween
-  "One animation over a node across normalized time t in [0,1].
-   OCP: a record per anim kind; adding a kind never touches the player."
+  "Samples one node animation at normalized time t in [0,1]."
   (-sample [tween t] "Attrs map (opacity/transform/fill/text) at time t."))
 
 (defprotocol IPlayer
@@ -21,7 +17,7 @@
   (-seek! [player t]))
 
 (defprotocol IDeck
-  "Reveal-like navigation over slides. ISP: orthogonal to playback."
+  "Navigates a collection of slides."
   (-slides [deck])
   (-current [deck])
   (-goto [deck i])

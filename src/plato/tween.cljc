@@ -1,15 +1,5 @@
 (ns plato.tween
-  "L2 (cljc, PURE): one ITween record per animation kind. A tween is a pure
-   function of NORMALIZED time t in [0,1] -> a partial attrs map keyed by CHANNEL
-   (:opacity/:fill/:text/:translate/:scale/:draw). Each record applies its OWN
-   rate function inside -sample (manim `smooth`; `there-and-back` for a pulse),
-   so the player passes raw normalized t and stays dumb. OCP: a new anim kind =
-   a new defrecord + a new build-span defmethod + one anim-channels entry; the
-   timeline fold and the player never change.
-
-   `build-span` is the constructor seam: given the anim descriptor and the
-   THREADED running node-state, it resolves concrete from/to values (the source
-   of count-to 1000->1100->1200->1300) and returns {:tween .. :writes ..}."
+  "Tween records and Desargues animation-descriptor compilation."
   (:require [plato.protocols :as p]
             [plato.color :as color]
             [plato.geometry :as geo]
@@ -84,7 +74,7 @@
 (defrecord Noop []                                ; :morph / unknown: graceful no-op
   p/ITween (-sample [_ _] {}))
 
-;; ── channel registry (OCP) + revealable set source ──────────────────────────
+;; ── animation channel registry ──────────────────────────────────────────────
 ;; kind -> the channels its span writes. Diagnostic on spans; :appear/:draw
 ;; targets seed the pre-appear-hidden set (see plato.timeline/compile-timeline).
 (def anim-channels

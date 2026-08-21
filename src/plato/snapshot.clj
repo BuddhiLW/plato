@@ -1,46 +1,62 @@
 (ns plato.snapshot
-  "CLJ-only: render a scene graph to a standalone SVG string (server-side export,
-   e.g. slide thumbnails / static previews). Reuses the pure cljc render core,
-   demonstrating the L0-L3 core runs unchanged outside the browser."
-  (:require [plato.render :as render]
-            [plato.scene :as sc]
-            [plato.geometry :as geo]
-            [clojure.java.io :as io]))
+  (:require [clojure.string :as str]
+            [plato.geometry :as geometry]
+            [plato.protocols :as protocols]
+            [plato.render :as render]
+            [plato.scene :as scene]
+            [plato.timeline :as timeline]))
 
-(defn- attr-str [m]
-  (apply str (for [[k v] m] (str " " (name k) "=\"" v "\""))))
+(defn- escape-xml [value]
+  (str/escape (str value)
+              {\& "&amp;"
+               \< "&lt;"
+               \> "&gt;"
+               \" "&quot;"
+               \' "&apos;"}))
 
-(defn hiccup->str [h]
+(defn- attr-str [attrs]
+  (apply str
+         (map (fn [[key value]]
+                (str " " (name key) "=\"" (escape-xml value) "\""))
+              attrs)))
+
+(defn hiccup->str [hiccup]
   (cond
-    (string? h) h
-    (number? h) (str h)
-    (nil? h)    ""
-    (vector? h) (let [[tag & r] h
-                      [attrs kids] (if (map? (first r)) [(first r) (rest r)] [{} r])]
-                  (str "<" (name tag) (attr-str attrs) ">"
-                       (apply str (map hiccup->str kids))
-                       "</" (name tag) ">"))
+    (string? hiccup) (escape-xml hiccup)
+    (number? hiccup) (str hiccup)
+    (nil? hiccup) ""
+    (vector? hiccup)
+    (let [[tag & body] hiccup
+          [attrs children] (if (map? (first body))
+                             [(first body) (rest body)]
+                             [{} body])]
+      (str "<" (name tag) (attr-str attrs) ">"
+           (apply str (map hiccup->str children))
+           "</" (name tag) ">"))
     :else ""))
 
-(defn scene->svg
-  "Standalone SVG string for a scene graph (final-state snapshot)."
-  [g]
-  (let [t    (render/svg-target)
-        body (for [[_ nd] (sort-by key (sc/nodes g))] (render/element t g nd))]
+(defn scene->svg [graph]
+  (let [compiled (timeline/compile-timeline graph)
+        frame (timeline/frame compiled (:duration compiled))
+        target (render/svg-target)
+        body (map (fn [id]
+                    (protocols/-apply
+                     target
+                     (render/element target graph (scene/node graph id))
+                     (get frame id {})))
+                  (:node-ids compiled))]
     (hiccup->str
      (into [:svg {:xmlns "http://www.w3.org/2000/svg"
-                  :viewBox (str "0 0 " geo/view-w " " geo/view-h)
-                  :width geo/view-w :height geo/view-h}
-            [:rect {:x 0 :y 0 :width geo/view-w :height geo/view-h :fill "#0b0e13"}]]
+                  :viewBox (str "0 0 " geometry/view-w " " geometry/view-h)
+                  :width geometry/view-w
+                  :height geometry/view-h}
+            [:rect {:x 0
+                    :y 0
+                    :width geometry/view-w
+                    :height geometry/view-h
+                    :fill "#0b0e13"}]]
            body))))
 
-(defn -main [& _]
-  (doseq [[nm sym] [["credit_creation"          'plato.scenes.credit-creation]
-                    ["fractional_reserve"        'plato.scenes.fractional-reserve]
-                    ["financial_intermediation"  'plato.scenes.financial-intermediation]]]
-    (require sym)
-    (let [g   @(ns-resolve sym 'graph)
-          out (str "snapshots/" nm ".svg")]
-      (io/make-parents out)
-      (spit out (scene->svg g))
-      (println :WROTE out))))
+(defn write-svg! [path graph]
+  (spit path (scene->svg graph))
+  path)

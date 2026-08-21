@@ -7,3 +7,6 @@
 /target/
 .DS_Store
 
+/.clj-kondo/.cache/
+/.clj-kondo/imports/
+/.lsp/

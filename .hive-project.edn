@@ -6,4 +6,5 @@
  :kg-backend :datahike
  :watch-dirs ["src" "examples" "test"]
  :hot-reload true
- :tags ["clojure" "clojurescript" "presentation" "reveal-js" "desargues" "animation" "svg"]}
+ :tags ["clojure" "clojurescript" "presentation" "reveal-js" "desargues" "animation" "svg"]
+ :carto {:source-roots ["examples" "src" "test"]}}

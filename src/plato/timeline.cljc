@@ -1,15 +1,5 @@
 (ns plato.timeline
-  "L2 (cljc, PURE): fold a desargues scene-graph's sequential :steps into a FLAT
-   timeline of absolute-time spans, then sample it at any wall-clock instant.
-
-   compile-timeline g -> {:duration T :spans [{:t0 :t1 :target :kind :idx
-                                               :channels :tween} ...]
-                          :revealable #{ids that fade in} :node-ids [draw order]}
-
-   Stratified low -> high: predicates -> node-state -> timing model ->
-   scheduling -> step fold (open multimethod) -> assembly -> sampling.
-   Every layer calls only the layer below, so the top functions read as prose.
-   All of it loads and runs under CLJ (no cljs-only forms)."
+  "Compile Desargues scene steps into absolute-time spans and sample frames."
   (:require [plato.protocols :as p]
             [plato.scene :as sc]
             [plato.geometry :as geo]
@@ -101,10 +91,17 @@
    :spans (all-spans schedules)
    :state (commit-writes state (merge-writes (map :writes schedules)))})
 
-(defn- compile-play [g t state anims]
-  (combine-schedules state (map #(schedule-anim g t state %) anims)))
+(defn- expand-scene-target [anim]
+  (if (and (= :scene (:target anim)) (seq (:ids anim)))
+    (map #(-> anim (assoc :target %) (dissoc :ids)) (:ids anim))
+    [anim]))
 
-;; ── step fold (L4): OCP over step kinds via a multimethod ───────────────────
+(defn- compile-play [g t state anims]
+  (combine-schedules state
+                     (map #(schedule-anim g t state %)
+                          (mapcat expand-scene-target anims))))
+
+;; ── step fold ───────────────────────────────────────────────────────────────
 ;; cursor = {:t seconds :state running-node-state :spans emitted-so-far}.
 (defmulti advance-step
   "Advance the compile cursor past one step. Add a step kind = add a defmethod."
