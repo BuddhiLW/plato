@@ -248,9 +248,34 @@ html, body, #app {
   align-items: start;
   width: 100%;
 }
-.plato-column { min-width: 0; }
 .plato-column > :first-child,
 .plato-group > :first-child { margin-top: 0; }
+
+/* Every direct child of a plato flex or grid container gets an explicit size
+   floor, declared once here rather than remembered per component.
+
+   The rule this exists to disarm: a flex or grid item is normally floored at
+   its CONTENT size, but the moment its `overflow` is anything other than
+   `visible` that floor silently becomes 0. So a component that merely hides
+   its own overflow stops reserving room for what it holds, and the content is
+   cut off by a box that had no reason to be that small. That is what put
+   .plato-code inside .plato-figure at zero height on 2026-08-27, and the
+   component it broke was not the one carrying the overflow.
+
+   min-width: 0 is the floor we WANT horizontally — it lets long text and code
+   wrap instead of forcing the track wider than the slide. Vertically the floor
+   has to be restored, not removed: min-content is the height below which
+   content is lost. Overflowing is now a build failure rather than a silent
+   crop, so a floor that is occasionally too tall is the safe direction to
+   err. */
+.plato-columns > *,
+.plato-grid > *,
+.plato-group > *,
+.plato-column > *,
+.plato-card > * {
+  min-width: 0;
+  min-height: min-content;
+}
 .plato-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
