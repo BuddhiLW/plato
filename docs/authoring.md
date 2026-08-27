@@ -195,6 +195,33 @@ Both front ends expose the same API:
 `docs/acme.md` and `docs/acme.org` are the same deck written twice; the test suite asserts they
 compile to the same slide ids, and both render byte-identical HTML.
 
+## 4b. EDN, and adding a front end
+
+Markdown and Org *compile to* a deck. EDN is the deck written down — the shape `plato.deck/deck`
+accepts, so `pr-str` of a deck is a valid source file and round-trips exactly:
+
+~~~bash
+plato build deck.edn -o dist/talk.html
+~~~
+
+Which formats exist is not decided by the CLI. `plato.source` is one multimethod plus a registry of
+extensions, and a front end declares itself the way a content kind does:
+
+~~~clojure
+(ns talk.latex
+  (:require [plato.source :as source]))
+
+(defn ->deck [text] ...)                       ; your parser, ending at deck/deck
+
+(source/register-extensions! :latex ["tex"])   ; .tex is read by :latex
+
+(defmethod source/->deck :latex [_ text] (->deck text))
+~~~
+
+Require that namespace and `plato build talk.tex` works. `plato.source/known-extensions` is the
+registry as data, and an extension registered with no method is caught by the test suite rather than
+by a user.
+
 ## 5. Theming
 
 Colors, spacing and type live in one EDN file, not in the stylesheet:

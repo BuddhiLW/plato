@@ -1,5 +1,9 @@
 # Plato
 
+**[See it explain itself →](https://buddhilw.github.io/plato/)** — plato’s own
+introduction, as a deck plato builds. ([the Acme
+demo](https://buddhilw.github.io/plato/acme.html) exercises every content kind.)
+
 Plato is a data-driven ClojureScript presentation engine built on Reveal.js. A deck is an ordinary Clojure value, so the same source renders as a live presentation in the browser, as a standalone HTML file from the JVM or a native binary, and can be asserted in a test suite.
 
 It adds a Clojure-native deck model, an open slide-content model, live playback for scene graphs emitted by the [Desargues](https://github.com/mentat-collective/desargues) animation engine, Markdown and Org front ends, and a token-driven theming pipeline.
@@ -10,7 +14,7 @@ Reveal’s navigation, overview, speaker notes, Markdown, syntax highlighting, m
 
 - **Deck DSL** — immutable maps for decks, horizontal slides, and vertical stacks.
 - **Content model** — images, GIFs, video, audio, iframes, code, tables, quotes, lists, columns, card grids, callouts and fragments are data, rendered through one open multimethod.
-- **Three front ends** — author in Clojure data, Markdown, or Org; all three compile to the same deck value.
+- **Open set of front ends** — Markdown, Org and EDN ship; a format joins by adding one `plato.source/->deck` method, with no edit to the CLI.
 - **Two render targets** — Reagent in the browser, an HTML string on the JVM. One definition of slide attributes serves both.
 - **Desargues playback** — compile RecordingBackend scene graphs into live, scrub-able SVG; the same scene renders as static SVG when there is no browser.
 - **Theming as data** — one EDN token file generates the CSS custom properties, the Clojure palette, and a JSON manifest.
@@ -25,7 +29,7 @@ npm install
 npm run dev
 ~~~
 
-- <http://localhost:8080/> — the engine example: Desargues scene graphs and the deck DSL.
+- <http://localhost:8080/> — plato explaining itself: the deck model, the open content and front-end registries, theming, and two live Desargues scenes. This is what ships to [buddhilw.github.io/plato](https://buddhilw.github.io/plato/), and the browser suite drives it, so a slide that stops rendering fails CI.
 - <http://localhost:8080/acme.html> — **Acme Corp — Q3 Product Review**, a 25-slide demo that exercises every content kind: background image and background video, an animated GIF, an inline video with poster and multiple sources, audio, an interactive iframe, stepped code highlighting, a native Reveal markdown slide, math, a metrics table, a card grid, a pull quote, a callout, an auto-animate pair, a vertical stack, and a live Desargues scene.
 
 Production build (both decks): `npm run build`. Full check: `npm run check`.
@@ -120,6 +124,27 @@ Org is the same model: `*` / `**` headlines, `#+TITLE:`, `:PROPERTIES:` drawers 
 
 Both parse to the same document IR (`plato.doc`) and compile to the same deck value. See [docs/authoring.md](docs/authoring.md) for the full syntax.
 
+### As EDN, or as a format that does not exist yet
+
+A `.edn` file holding a deck map is a source like any other, so `pr-str` of a deck is a valid input file:
+
+~~~bash
+plato build deck.edn -o dist/talk.html
+~~~
+
+Which formats exist is not decided in the CLI. `plato.source` holds one multimethod and a registry, and a front end declares itself:
+
+~~~clojure
+(ns talk.latex
+  (:require [plato.source :as source]))
+
+(source/register-extensions! :latex ["tex"])
+
+(defmethod source/->deck :latex [_ text] ...)
+~~~
+
+Requiring that namespace is all the CLI needs — the same open/closed shape as `plato.content/render`.
+
 ## The CLI
 
 ~~~bash
@@ -204,7 +229,7 @@ home. From the REPL the same thing is a function call:
 | Layer | Namespace | Runtime |
 | --- | --- | --- |
 | Deck + content model | `plato.deck`, `plato.content` | CLJ/CLJS/cljw |
-| Front ends | `plato.doc`, `plato.markdown`, `plato.org` | CLJ/CLJS/cljw |
+| Front ends | `plato.source`, `plato.doc`, `plato.markdown`, `plato.org`, `plato.data` | CLJ/CLJS/cljw |
 | Animation core | `plato.timeline`, `plato.tween`, `plato.clock` | CLJ/CLJS/cljw |
 | Render core | `plato.render`, `plato.geometry`, `plato.hiccup`, `plato.snapshot` | CLJ/CLJS/cljw |
 | Text primitives | `plato.text`, `plato.nfd` | CLJ/CLJS/cljw |
