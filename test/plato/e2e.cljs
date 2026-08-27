@@ -89,7 +89,33 @@
     [{:name "columns and their nested bullets both rendered"
       :js (str "(function(){var s=document.querySelector('section#tested');"
                "return !!s && s.querySelectorAll('.plato-list li').length;})()")
-      :ok? #(>= % 6)}]}])
+      :ok? #(>= % 6)}]}
+
+   ;; ── fit ─────────────────────────────────────────────────────────────────
+   ;; Reveal lays a deck out in a fixed box and CSS-scales that box to the
+   ;; window, so whether a slide overflows is a property of the build rather
+   ;; than of the viewer's screen — which is what makes it gateable at all.
+   ;; plato.fit does the measuring inside the page; these probes only carry the
+   ;; verdict out, so the rule lives in one place and ships with the engine.
+   {:url "/index.html"
+    :settle 1500
+    :probes
+    [{:name "every slide of the site deck fits its slide box"
+      :js "plato.fit.checkDeck()"
+      :ok? nil?}
+     {:name "no slide waives an overflow it no longer has"
+      :js "plato.fit.checkWaivers()"
+      :ok? nil?}]}
+
+   {:url "/acme.html"
+    :settle 1800
+    :probes
+    [{:name "every slide of the Acme deck fits its slide box"
+      :js "plato.fit.checkDeck()"
+      :ok? nil?}
+     {:name "no Acme slide waives an overflow it no longer has"
+      :js "plato.fit.checkWaivers()"
+      :ok? nil?}]}])
 
 ;; ── static server ───────────────────────────────────────────────────────────
 

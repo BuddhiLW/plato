@@ -1,5 +1,6 @@
 {:source-paths ["src" "examples" "test"]
  :dependencies [[reagent "2.0.1"]]
+ :nrepl {:port 7899}
  :dev-http {8080 "public"}
  :builds
  {:e2e  {:target :node-script

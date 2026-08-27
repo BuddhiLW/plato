@@ -1,0 +1,60 @@
+;; hive-cljs manifest for plato.
+;;
+;; Targets the shadow-cljs dev server on :dev-http 8080, serving `public/` —
+;; the same tree the Pages workflow deploys, so a scenario drives the artifact
+;; that ships rather than a test double.
+;;
+;; :nrepl-port is what makes the fit scenarios possible: overflow is a property
+;; of laid-out pixels, so the assertion has to run inside the page. The steps
+;; call plato.fit in the browser runtime — one definition of "fits", shared by
+;; the scenarios here and the authoring overlay.
+{:hive.cljs/shadow {:host       "localhost"
+                    :port       9630
+                    :nrepl-port 7899}
+
+ :hive.cljs/builds {:app  {:shadow/id :app
+                           :http-port 8080
+                           :entry     "/index.html"}
+                    :acme {:shadow/id :acme
+                           :http-port 8080
+                           :entry     "/acme.html"}}
+
+ :hive.cljs/e2e
+ {:browser    :chromium
+  :headless   true
+  :timeout-ms 20000
+  :scenarios
+  [;; ── fit ────────────────────────────────────────────────────────────────
+   ;; Reveal lays a deck out in a FIXED box (960x700 here) and CSS-scales that
+   ;; box to the window, so "does this slide fit" has one answer per build and
+   ;; is not a property of the viewer's screen. That makes it gateable.
+   {:id    :fit-site
+    :build :app
+    :tags  [:fit :smoke]
+    :doc   "Every slide of the published site deck fits its slide box, and no
+            element inside one is clipped. A slide may overflow only when it
+            says so with {:overflow :allow}."
+    :steps [[:goto "/index.html"]
+            [:wait-for ".reveal .slides section"]
+            [:wait-ms 1200]
+            [:eval-cljs "(plato.fit/assert-deck-fits!)"]]}
+
+   {:id    :fit-acme
+    :build :acme
+    :tags  [:fit :smoke]
+    :doc   "The same gate over the Acme demo deck."
+    :steps [[:goto "/acme.html"]
+            [:wait-for ".reveal .slides section"]
+            [:wait-ms 1500]
+            [:eval-cljs "(plato.fit/assert-deck-fits!)"]]}
+
+   ;; ── waivers stay honest ────────────────────────────────────────────────
+   {:id    :fit-no-stale-waivers
+    :build :app
+    :tags  [:fit]
+    :doc   "A slide carrying {:overflow :allow} that now fits is a waiver that
+            outlived its reason — it hides the next real overflow."
+    :steps [[:goto "/index.html"]
+            [:wait-for ".reveal .slides section"]
+            [:wait-ms 1200]
+            [:eval-cljs "(plato.fit/assert-no-stale-waivers!)"]]}]}}
