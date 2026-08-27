@@ -1,31 +1,36 @@
 (ns plato.deck)
 
 (def reveal-data-keys
-  "Slide options passed through to Reveal as data- attributes."
-  #{:auto-animate
-    :auto-animate-duration
-    :auto-animate-easing
-    :auto-animate-id
-    :auto-animate-restart
-    :auto-animate-unmatched
-    :background-color
-    :background-gradient
-    :background-iframe
-    :background-image
-    :background-interactive
-    :background-opacity
-    :background-position
-    :background-repeat
-    :background-size
-    :background-video
-    :background-video-loop
-    :background-video-muted
-    :preload
-    :state
-    :timing
-    :transition
-    :transition-speed
-    :visibility})
+  "Slide options passed through to Reveal as data- attributes, in the order
+   they are emitted.
+
+   A vector, not a set: attribute order is then a property of plato rather than
+   of the host's set iteration, so the JVM and the native binary render the same
+   slide to the same bytes."
+  [:auto-animate
+   :auto-animate-duration
+   :auto-animate-easing
+   :auto-animate-id
+   :auto-animate-restart
+   :auto-animate-unmatched
+   :background-color
+   :background-gradient
+   :background-iframe
+   :background-image
+   :background-interactive
+   :background-opacity
+   :background-position
+   :background-repeat
+   :background-size
+   :background-video
+   :background-video-loop
+   :background-video-muted
+   :preload
+   :state
+   :timing
+   :transition
+   :transition-speed
+   :visibility])
 
 (defn attr-value
   "Slide-option value -> DOM attribute value. `true` becomes the empty string."

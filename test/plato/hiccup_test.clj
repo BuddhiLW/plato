@@ -1,6 +1,7 @@
 (ns plato.hiccup-test
-  (:require [clojure.test :refer [deftest is]]
-            [plato.hiccup :as hiccup]))
+  (:require [clojure.test :refer [deftest is testing]]
+            [plato.hiccup :as hiccup]
+            [clojure.string :as str]))
 
 (deftest parse-tag-splits-shorthand
   (is (= ["div" nil []] (hiccup/parse-tag :div)))
@@ -17,7 +18,7 @@
          (hiccup/->html [:div#shorthand {:id "kept"}]))))
 
 (deftest attribute-values-are-normalized
-  (is (= "<a href=\"/x\" data-open=\"\">go</a>"
+  (is (= "<a data-open=\"\" href=\"/x\">go</a>"
          (hiccup/->html [:a {:href "/x" :data-open true :data-closed false} "go"])))
   (is (= "<p style=\"color:red;font-size:12px\"></p>"
          (hiccup/->html [:p {:style {:color :red :font-size "12px"}}])))
@@ -30,9 +31,24 @@
          (hiccup/->html [:p {:title "\"q\" & 'a'"}]))))
 
 (deftest void-elements-have-no-closing-tag
-  (is (= "<img src=\"a.png\" alt=\"\">" (hiccup/->html [:img {:src "a.png" :alt ""}])))
+  (is (= "<img alt=\"\" src=\"a.png\">" (hiccup/->html [:img {:src "a.png" :alt ""}])))
   (is (= "<br>" (hiccup/->html [:br])))
   (is (= "<hr class=\"rule\">" (hiccup/->html [:hr.rule]))))
+
+(deftest attribute-order-does-not-depend-on-the-map
+  (let [pairs [[:id "s"] [:data-transition "fade"] [:data-background-opacity "0.35"]
+               [:data-background-image "hero.jpg"] [:data-preload true]
+               [:data-state "lit"] [:data-timing "3"] [:data-visibility "visible"]
+               [:data-auto-animate true] [:data-transition-speed "slow"]]
+        render (fn [ps] (hiccup/->html [:section (into {} ps)]))]
+    (testing "same attributes, different map shapes and insertion orders"
+      (is (= (render pairs)
+             (render (reverse pairs))
+             (render (concat (drop 3 pairs) (take 3 pairs)))
+             (hiccup/->html [:section (apply array-map (mapcat identity pairs))]))))
+    (testing "id leads, the rest follow by name"
+      (is (str/starts-with? (render pairs)
+                            "<section id=\"s\" data-auto-animate=\"\" data-background-image=")))))
 
 (deftest raw-text-elements-are-not-escaped
   (is (= "<style>.a > .b { color: red }</style>"

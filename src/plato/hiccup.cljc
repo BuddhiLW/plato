@@ -70,11 +70,21 @@
       (keyword? v) (str " " n "=\"" (escape (name v)) "\"")
       :else (str " " n "=\"" (escape v) "\""))))
 
+(def ^:private leading-attrs
+  "Attributes emitted first, in this order; everything else follows by name."
+  {:id 0 :class 1})
+
 (defn attrs->string
-  "Attribute map -> serialized HTML attribute string (leading space per attr)."
+  "Attribute map -> serialized HTML attribute string (leading space per attr).
+
+   Order is imposed here rather than inherited from the map: no Clojure map
+   preserves insertion order past a handful of entries, and which order it falls
+   back to is a property of the host. Sorting makes the same element serialize
+   to the same bytes on the JVM, in the browser and in the native binary."
   [attrs]
   (->> attrs
        (remove (fn [[k _]] (contains? react-only-props k)))
+       (sort-by (fn [[k _]] [(get leading-attrs k 2) (name k)]))
        (keep (fn [[k v]] (attr-string k v)))
        (apply str)))
 

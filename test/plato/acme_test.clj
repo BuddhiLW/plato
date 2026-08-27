@@ -123,7 +123,7 @@
     (is (str/includes? page "<source src=\"assets/acme/demo.webm\" type=\"video/webm\">"))
     (is (str/includes? page "<source src=\"assets/acme/demo.mp4\" type=\"video/mp4\">")))
   (testing "audio and iframe"
-    (is (str/includes? page "<audio src=\"assets/acme/chime.mp3\""))
+    (is (str/includes? page "<audio class=\"plato-audio\" controls=\"\" src=\"assets/acme/chime.mp3\">"))
     (is (str/includes? page "<iframe "))
     (is (str/includes? page "src=\"assets/acme/embed.html\""))))
 

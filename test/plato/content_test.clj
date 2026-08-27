@@ -47,12 +47,11 @@
   (is (re-find #"<video[^>]* src=\"only.mp4\"" (html (content/video "only.mp4")))))
 
 (deftest audio-and-embed-render
-  (is (re-find #"<audio src=\"chime.mp3\" class=\"plato-audio\" controls=\"\">"
+  (is (re-find #"<audio class=\"plato-audio\" controls=\"\" src=\"chime.mp3\">"
                (html (content/audio "chime.mp3"))))
   (let [out (html (content/embed "e.html" {:caption "Live" :ratio "4 / 3"}))]
     (is (re-find #"aspect-ratio:4 / 3" out))
-    (is (re-find #"<iframe title=\"Live\"" out))
-    (is (re-find #"src=\"e.html\"" out))))
+    (is (re-find #"<iframe allowFullScreen=\"\" frameBorder=\"0\" loading=\"lazy\" src=\"e.html\" title=\"Live\">" out))))
 
 (deftest code-emits-a-highlightable-block
   (let [out (html (content/code :clojure "(< 1 2)" {:highlight "1|2"}))]

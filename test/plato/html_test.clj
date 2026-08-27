@@ -35,7 +35,7 @@
   (is (str/includes? page "<html lang=\"en\">"))
   (is (str/includes? page "<meta charset=\"utf-8\">"))
   (is (str/includes? page
-                     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"))
+                     "<meta content=\"width=device-width, initial-scale=1\" name=\"viewport\">"))
   (is (str/includes? page "<title>Acme</title>"))
   (is (str/includes? page "<div class=\"reveal\"><div class=\"slides\">")))
 
