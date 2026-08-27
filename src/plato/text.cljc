@@ -5,7 +5,8 @@
    markdown, org or decks. Every predicate is Unicode-aware on every dialect,
    spelled per-dialect on purpose — a \\p{...} class inside a shared regex
    literal does not survive ClojureScript's RegExp reconstruction, which drops
-   the u flag.")
+   the u flag."
+  (:require [plato.nfd :as nfd]))
 
 (defn char-at
   "Character at index `i` of `s`, or nil when `i` is out of bounds."
@@ -42,12 +43,16 @@
      :default (fn [c] (and c (some? (re-matches #"\s" (str c)))))))
 
 (defn decompose
-  "NFD form of `s`, so a combining mark stands apart from its base letter and
-   can be dropped on its own."
+  "`s` with every precomposed character expanded into its base letter and
+   combining marks, so a mark can be dropped on its own. Characters outside
+   `plato.nfd/table`'s blocks come back unchanged.
+
+   One implementation on every dialect — a host normalizer would make the same
+   heading slug differently depending on which runtime built the deck."
   [s]
-  #?(:clj (java.text.Normalizer/normalize s java.text.Normalizer$Form/NFD)
-     :cljs (.normalize s "NFD")
-     :default s))
+  (if (some nfd/table s)
+    (apply str (map #(get nfd/table % %) s))
+    s))
 
 (defn stable-hash
   "Deterministic 31-rolling hash of `s`. Identical on every host, so an id
