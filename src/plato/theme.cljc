@@ -33,7 +33,7 @@
    :scale {:radius "0.65rem"
            :radius-lg "0.75rem"
            :media-max "400px"
-           :code-max "320px"
+           :code-max "356px"
            :scene-max "440px"
            :gap "1rem"}
    :type {:sans "Inter, ui-sans-serif, system-ui, sans-serif"

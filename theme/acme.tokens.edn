@@ -35,7 +35,8 @@
  :scale {:radius "0.5rem"
          :radius-lg "0.9rem"
          :media-max "420px"
-         :code-max "320px"
+         ;; The code BOX, padding included — see theme/plato.tokens.edn.
+         :code-max "356px"
          :scene-max "460px"
          :gap "1.1rem"}
 

@@ -9,6 +9,13 @@
 
 /* ── shell ──────────────────────────────────────────────────────────────── */
 
+/* Every plato component sizes as a border box. Under the default content-box a
+   rule as ordinary as `width: 100%` plus horizontal padding renders wider than
+   its parent — .plato-quote at 960px + 44px of padding came out 1051px and
+   pushed its slide 91px past the slide box. Scoped to plato's own classes so
+   reveal's elements keep the sizing reveal.css assumes for them. */
+[class*="plato-"] { box-sizing: border-box; }
+
 html, body, #app {
   width: 100%;
   height: 100%;
@@ -117,7 +124,12 @@ html, body, #app {
 .reveal .plato-code {
   width: 100%;
   margin: 0;
+  /* overflow:hidden rounds the corners over the code's background, but it also
+     gives this box an automatic minimum size of 0 as a grid item — inside
+     .plato-figure that let the row size below the code and cut a line off the
+     bottom. min-height restores the content-based floor the overflow removed. */
   overflow: hidden;
+  min-height: fit-content;
   font-size: 0.5em;
   background: var(--plato-panel);
   border: 1px solid var(--plato-line);
@@ -126,6 +138,10 @@ html, body, #app {
 }
 .reveal .plato-code code {
   display: block;
+  /* border-box so max-height and the intrinsic size both count the padding.
+     Under content-box the grid row above sized to the content height and left
+     the 18px of padding out on each side — the missing 36px. */
+  box-sizing: border-box;
   max-height: var(--plato-code-max);
   padding: 0.9em 1.1em;
   overflow: auto;

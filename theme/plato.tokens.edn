@@ -38,7 +38,9 @@
  :scale {:radius "0.65rem"
          :radius-lg "0.75rem"
          :media-max "400px"
-         :code-max "320px"
+         ;; The code BOX, padding included — .plato-code code is border-box, so
+         ;; this is 320px of code plus its 18px of padding top and bottom.
+         :code-max "356px"
          :scene-max "440px"
          :gap "1rem"}
 
