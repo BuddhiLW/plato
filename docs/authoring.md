@@ -317,3 +317,54 @@ README for what still does not work on the native binary.
 
 In a static export a Desargues scene renders as its **final frame** — the same scene is a scrub-able
 player in the browser. Both projections come from one `plato.render/scene-svg`.
+
+## 7. Fit — slides that do not fit fail the build
+
+Reveal lays every deck out in a **fixed slide box** (960×700 unless the deck's `:config` says
+otherwise) and CSS-transform-scales that box to whatever window is showing it. So whether a slide
+overflows is a property of the *build*, not of the viewer's screen: it overflows on a laptop, a
+projector and a phone alike, by the same number of pixels. That is what makes it gateable.
+
+`plato.fit` measures it, and the `:fit` scenarios fail the build on it:
+
+~~~bash
+npm run e2e          # includes the fit gate over both shipped decks
+~~~
+
+A failure names the slide, what overflowed and by how much:
+
+~~~
+front-ends — is 163px taller than the slide box; clips <code class="language-org">, 95px of it
+             horizontally, 86px of it vertically
+finish     — is 91px wider than the slide box
+~~~
+
+Two things are checked. A **slide** that is taller or wider than the box has content below the fold
+or past the edge. An **element inside one** that cuts its own content off — a `<pre>` with
+`overflow: hidden`, a column too narrow for its code — is reported separately, because a
+presentation is not scrollable by its audience: content that needs scrolling is content nobody
+reads. An element whose overflow is `visible` is not a finding; it spills, but it stays on screen.
+
+### Saying an overflow is deliberate
+
+A full-bleed image, or a deliberately long listing the presenter scrolls, is not a defect. Declare
+it and the gate lets it through:
+
+~~~clojure
+(deck/slide :wall-of-code source {:overflow :allow})
+~~~
+
+The declaration is validated when the deck is built — `{:overflow :allowed}` throws rather than
+silently meaning "not waived" — and is projected to `data-plato-overflow` on the `<section>`, so the
+checker reads the intent off the page and needs no reference to the deck that produced it.
+
+A waiver on a slide that *now fits* is itself reported. Otherwise it stays behind after the content
+shrinks and hides the next real overflow.
+
+### What this cannot do
+
+There is no compile-time answer. Whether text fits depends on font metrics, line breaking and the
+whole CSS cascade — knowing it means running a layout engine, and plato asks the engine that will
+actually render the deck rather than modelling a second one that would disagree with it. What *is*
+decided at deck-build time is the declaration: an `:overflow` value the checker would not recognise
+fails immediately, with no browser involved.
