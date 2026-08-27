@@ -1,64 +1,36 @@
 (ns plato.core
   (:require [reagent.core :as r]
             [reagent.dom.client :as rdom]
+            [plato.content :as content]
             [plato.deck :as deck]
             [plato.reveal :as reveal]
-            [plato.scene-view :as scene-view]))
-
-(def ^:private reveal-data-keys
-  #{:auto-animate
-    :background-color
-    :background-image
-    :background-opacity
-    :background-position
-    :background-repeat
-    :background-size
-    :background-video
-    :background-video-loop
-    :background-video-muted
-    :state
-    :transition
-    :transition-speed
-    :visibility})
+            [plato.scene-view]))
 
 (defonce ^:private roots (js/WeakMap.))
 
-(defn- js-value [value]
-  (cond
-    (true? value) ""
-    (keyword? value) (name value)
-    :else value))
-
-(defn- section-attrs [slide]
-  (reduce (fn [attrs key]
-            (if (contains? slide key)
-              (assoc attrs
-                     (keyword (str "data-" (name key)))
-                     (js-value (get slide key)))
-              attrs))
-          {:id (name (:id slide))}
-          reveal-data-keys))
-
 (declare entry-view)
 
-(defn- content-view [content]
-  (cond
-    (= :desargues (:plato/type content)) [scene-view/scene-view content]
-    (fn? content) [content]
-    :else content))
-
 (defn- slide-view [{:keys [content notes] :as slide}]
-  (let [attrs (section-attrs slide)]
+  (let [attrs (deck/section-attrs slide)
+        aside (when notes [:aside.notes (content/render notes)])]
     (if (string? content)
-      [:section (assoc attrs :data-markdown "")
-       [:script {:type "text/template"} content]
-       (when notes [:aside.notes notes])]
+      ;; data-markdown goes on a NESTED div, never on the section itself: the
+      ;; plugin rewrites the element it finds it on via innerHTML, and React
+      ;; must keep owning the <section>. The notes aside stays outside that div
+      ;; so the rewrite cannot swallow it. The template is a <script> rather
+      ;; than a <textarea> because React builds it as a DOM text node — no HTML
+      ;; tokenizer, so </script> in the markdown is inert here. The exporter,
+      ;; which does serialize, uses <textarea data-template> instead.
       [:section attrs
-       (content-view content)
-       (when notes [:aside.notes notes])])))
+       [:div {:data-markdown ""}
+        [:script {:type "text/template"} content]]
+       aside]
+      [:section attrs
+       (content/render content)
+       aside])))
 
-(defn- stack-view [{:keys [id slides]}]
-  (into [:section {:id (name id)}]
+(defn- stack-view [{:keys [slides] :as stack}]
+  (into [:section (deck/section-attrs stack)]
         (map entry-view slides)))
 
 (defn- entry-view [entry]

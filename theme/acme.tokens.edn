@@ -1,0 +1,48 @@
+;; Acme Corp deck theme — a per-deck style file.
+;; Same token contract as theme/plato.tokens.edn, different values: swapping it
+;; restyles a deck without touching the deck data.
+;; Regenerate: plato theme theme/acme.tokens.edn -o public/css/acme-theme.css
+{:meta {:prefix "plato"
+        :name "Acme Amber"
+        :reveal-theme "night"}
+
+ :color {:bg "#12100e"
+         :panel "#1d1a16"
+         :fg "#f6f2ec"
+         :muted "#a89e91"
+         :accent "#f59e0b"
+         :line "#332c24"
+         :line-strong "#453b30"
+         :row-alt "rgba(245, 158, 11, 0.045)"
+         :info "#7dc4e4"
+         :warn "#f59e0b"
+         :ok "#7fc79a"
+
+         :teal "#35C1A0"
+         :gold "#F59E0B"
+         :grey "#8A8F98"
+         :gray "#8A8F98"
+         :red "#E0553F"
+         :yellow "#FFD24A"
+         :white "#FFFFFF"
+         :blue "#5AA9E6"
+         :green "#7FC79A"
+         :purple "#A07CC5"
+         :orange "#FF7A1A"
+         :pink "#E77FA3"
+         :black "#000000"}
+
+ :scale {:radius "0.5rem"
+         :radius-lg "0.9rem"
+         :media-max "420px"
+         :code-max "320px"
+         :scene-max "460px"
+         :gap "1.1rem"}
+
+ :type {:sans "\"Söhne\", Inter, ui-sans-serif, system-ui, sans-serif"
+        :mono "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, monospace"}
+
+ :scene {:palette [:teal :gold :grey :gray :red :yellow :white
+                   :blue :green :purple :orange :pink :black]
+         :background :bg
+         :fallback :grey}}

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="Acme content pipeline: Source, Parse, Deck, Render, Export">
+  <title>Acme content pipeline</title>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0ac5f"/></marker></defs>
+  <rect width="1200" height="300" fill="#0b0e13"/>
+  <text x="50" y="60" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="28" font-weight="bold" fill="#edf2f7" text-anchor="start">Acme content pipeline</text>
+  <text x="50" y="92" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="normal" fill="#9aa7b5" text-anchor="start">one source of truth, five deterministic stages</text>
+  <rect x="50" y="144" width="184" height="92" rx="14" fill="#141a22" stroke="#273140" stroke-width="1.5"/>
+  <rect x="68" y="154" width="148" height="4" rx="2" fill="#5cd0b3"/>
+  <text x="142" y="192" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="bold" fill="#edf2f7" text-anchor="middle">Source</text>
+  <text x="142" y="218" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="normal" fill="#9aa7b5" text-anchor="middle">edn</text>
+  <line x1="244" y1="190" x2="267" y2="190" stroke="#f0ac5f" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="279" y="144" width="184" height="92" rx="14" fill="#141a22" stroke="#273140" stroke-width="1.5"/>
+  <rect x="297" y="154" width="148" height="4" rx="2" fill="#81c79e"/>
+  <text x="371" y="192" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="bold" fill="#edf2f7" text-anchor="middle">Parse</text>
+  <text x="371" y="218" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="normal" fill="#9aa7b5" text-anchor="middle">spec</text>
+  <line x1="473" y1="190" x2="496" y2="190" stroke="#f0ac5f" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="508" y="144" width="184" height="92" rx="14" fill="#141a22" stroke="#273140" stroke-width="1.5"/>
+  <rect x="526" y="154" width="148" height="4" rx="2" fill="#a6be89"/>
+  <text x="600" y="192" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="bold" fill="#edf2f7" text-anchor="middle">Deck</text>
+  <text x="600" y="218" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="normal" fill="#9aa7b5" text-anchor="middle">model</text>
+  <line x1="702" y1="190" x2="725" y2="190" stroke="#f0ac5f" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="737" y="144" width="184" height="92" rx="14" fill="#141a22" stroke="#273140" stroke-width="1.5"/>
+  <rect x="755" y="154" width="148" height="4" rx="2" fill="#cbb574"/>
+  <text x="829" y="192" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="bold" fill="#edf2f7" text-anchor="middle">Render</text>
+  <text x="829" y="218" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="normal" fill="#9aa7b5" text-anchor="middle">hiccup</text>
+  <line x1="931" y1="190" x2="954" y2="190" stroke="#f0ac5f" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="966" y="144" width="184" height="92" rx="14" fill="#141a22" stroke="#273140" stroke-width="1.5"/>
+  <rect x="984" y="154" width="148" height="4" rx="2" fill="#f0ac5f"/>
+  <text x="1058" y="192" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="24" font-weight="bold" fill="#edf2f7" text-anchor="middle">Export</text>
+  <text x="1058" y="218" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="15" font-weight="normal" fill="#9aa7b5" text-anchor="middle">html</text>
+</svg>

@@ -1,0 +1,51 @@
+;; Plato's default theme. Source of truth for
+;;   public/css/plato-theme.css   CSS custom properties
+;;   src/plato/theme.cljc         the same tokens as Clojure data
+;;   theme/plato.tokens.json      language-neutral manifest
+;; Regenerate all three: plato theme theme/plato.tokens.edn
+{:meta {:prefix "plato"
+        :name "Plato Midnight"
+        :reveal-theme "night"}
+
+ ;; Every :color entry becomes --plato-<key>, and the keys listed under
+ ;; :scene/:palette are also the semantic names scene graphs may use.
+ :color {:bg "#0b0e13"
+         :panel "#141a22"
+         :fg "#edf2f7"
+         :muted "#9aa7b5"
+         :accent "#f0ac5f"
+         :line "#273140"
+         :line-strong "#2a3544"
+         :row-alt "rgba(255, 255, 255, 0.028)"
+         :info "#5fb4f0"
+         :warn "#f0ac5f"
+         :ok "#5fd39a"
+
+         :teal "#5CD0B3"
+         :gold "#F0AC5F"
+         :grey "#8A8F98"
+         :gray "#8A8F98"
+         :red "#FC6255"
+         :yellow "#FFFF3B"
+         :white "#FFFFFF"
+         :blue "#58C4DD"
+         :green "#83C167"
+         :purple "#9A72AC"
+         :orange "#FF862F"
+         :pink "#FF69B4"
+         :black "#000000"}
+
+ :scale {:radius "0.65rem"
+         :radius-lg "0.75rem"
+         :media-max "400px"
+         :code-max "320px"
+         :scene-max "440px"
+         :gap "1rem"}
+
+ :type {:sans "Inter, ui-sans-serif, system-ui, sans-serif"
+        :mono "ui-monospace, SFMono-Regular, \"JetBrains Mono\", Menlo, monospace"}
+
+ :scene {:palette [:teal :gold :grey :gray :red :yellow :white
+                   :blue :green :purple :orange :pink :black]
+         :background :bg
+         :fallback :grey}}

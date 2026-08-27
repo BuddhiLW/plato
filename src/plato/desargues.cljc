@@ -1,4 +1,9 @@
-(ns plato.desargues)
+(ns plato.desargues
+  "Desargues scene-graph contract, the :desargues content constructor, and the
+   STATIC projection of that content kind."
+  (:require [plato.content :as content]
+            [plato.render :as render]
+            [plato.timeline :as timeline]))
 
 (defn graph? [value]
   (and (map? value)
@@ -30,3 +35,9 @@
            :autoplay? false
            :controls? true}
           opts)))
+
+(defmethod content/render :desargues [{:keys [graph]}]
+  (let [compiled (timeline/compile-timeline graph)
+        frame (timeline/frame compiled (:duration compiled))]
+    [:div.plato-scene
+     (render/scene-svg (render/svg-target) graph frame (:node-ids compiled))]))

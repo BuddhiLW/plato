@@ -1,25 +1,11 @@
 (ns plato.scene-view
   (:require [reagent.core :as r]
-            [plato.geometry :as geometry]
             [plato.player :as player]
             [plato.protocols :as p]
             [plato.render :as render]
-            [plato.scene :as scene]
-            [plato.timeline :as timeline]))
-
-(defn- node-view [target graph frame id]
-  [:g {:key (str id)}
-   (p/-apply target
-             (p/-element target graph (scene/node graph id))
-             (get frame id {}))])
-
-(defn- scene-canvas [target graph frame node-ids]
-  (into
-   [:svg {:viewBox (str "0 0 " geometry/view-w " " geometry/view-h)
-          :preserveAspectRatio "xMidYMid meet"
-          :role "img"
-          :aria-label (str (scene/scene-name graph))}]
-   (map #(node-view target graph frame %) node-ids)))
+            [plato.timeline :as timeline]
+            [plato.content :as content]
+            [plato.desargues :as desargues]))
 
 (defn- transport [browser-player playback]
   (let [{:keys [t duration playing?]} playback]
@@ -40,16 +26,47 @@
                                     (js/parseFloat (.. % -target -value)))}]
      [:output (str (.toFixed t 2) " / " (.toFixed duration 2) " s")]]))
 
-(defn scene-view [{:keys [graph autoplay? controls?]}]
+(defn- play-when-visible!
+  "Play `browser-player` the first time `el` is on screen. Returns the observer,
+   or nil when the browser has no IntersectionObserver."
+  [el browser-player]
+  (when (and el (exists? js/IntersectionObserver))
+    (let [observer (atom nil)]
+      (reset! observer
+              (js/IntersectionObserver.
+               (fn [entries]
+                 (when (some #(.-isIntersecting %) (array-seq entries))
+                   (.disconnect @observer)
+                   (p/-play! browser-player)))
+               #js {:threshold 0.2}))
+      (.observe @observer el)
+      @observer)))
+
+(defn scene-view
+  "Reagent component for a Desargues scene. `:autoplay?` starts playback when the
+   scene first becomes visible, not when the deck mounts."
+  [{:keys [graph autoplay? controls?]}]
   (r/with-let [compiled (timeline/compile-timeline graph)
                browser-player (player/player (:duration compiled))
                target (render/svg-target)
-               _ (when autoplay? (p/-play! browser-player))]
+               observer (atom nil)]
     (let [playback @(player/state-atom browser-player)
           frame (timeline/frame compiled (:t playback))]
       [:div.plato-scene
+       {:ref (fn [el]
+               (when (and autoplay? el (nil? @observer))
+                 (reset! observer (play-when-visible! el browser-player))))}
        (when controls?
          [transport browser-player playback])
-       [scene-canvas target graph frame (:node-ids compiled)]])
+       (render/scene-svg target graph frame (:node-ids compiled))])
     (finally
+      (when-let [obs @observer] (.disconnect obs))
       (player/destroy! browser-player))))
+
+(defmethod content/render :desargues [scene]
+  ;; plato.desargues installs the STATIC :desargues method the exporter uses;
+  ;; this one must be installed after it to win in the browser, so the require
+  ;; above is load-bearing. Calling into that namespace keeps the dependency
+  ;; visible to tooling that would otherwise prune an unused require — and it
+  ;; holds the live method to the same precondition as the static one.
+  [scene-view (update scene :graph desargues/assert-graph!)])

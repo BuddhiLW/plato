@@ -5,4 +5,4 @@
   "Format number `v` with `dp` decimal places."
   [v dp]
   #?(:cljs (.toFixed v dp)
-     :clj  (format (str "%." dp "f") (double v))))
+     :default (format (str "%." dp "f") (double v))))

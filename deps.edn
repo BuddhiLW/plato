@@ -4,4 +4,6 @@
  :aliases
  {:dev {:extra-paths ["examples"]}
   :test {:extra-paths ["test" "examples"]
-         :main-opts ["-m" "plato.test-runner"]}}}
+         :main-opts ["-m" "plato.test-runner"]}
+  :cli {:extra-paths ["examples"]
+        :main-opts ["-m" "plato.cli"]}}}

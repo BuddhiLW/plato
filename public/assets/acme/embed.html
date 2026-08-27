@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme deploy status</title>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --panel: #141a22;
+    --accent: #f0ac5f;
+    --teal: #5cd0b3;
+    --muted: #9aa7b5;
+    --text: #edf2f7;
+    --line: #273140;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    padding: clamp(12px, 2.5vw, 24px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  header { display: flex; align-items: center; gap: 12px; }
+  header svg { width: 34px; height: 34px; flex: none; }
+  h1 { font-size: clamp(16px, 2.6vw, 22px); margin: 0; letter-spacing: -0.02em; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .pill {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: rgba(92, 208, 179, 0.13); color: var(--teal); border: 1px solid rgba(92, 208, 179, 0.3);
+    white-space: nowrap;
+  }
+  .pill[data-state="busy"] { background: rgba(240, 172, 95, 0.14); color: var(--accent); border-color: rgba(240, 172, 95, 0.34); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pill[data-state="busy"] .dot { animation: blink 0.8s steps(2, end) infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .card .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; }
+  .card .v { font-size: clamp(20px, 4vw, 28px); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .card .v.accent { color: var(--accent); }
+  .card .v.teal { color: var(--teal); }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.18s linear; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 16px;
+    background: var(--panel); color: var(--text);
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #10141a; }
+  button.primary:hover:not(:disabled) { background: #f6bd7c; color: #10141a; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  ol { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: auto;
+       background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  li { display: flex; gap: 10px; padding: 7px 12px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  li time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  li b { color: var(--teal); font-weight: 600; flex: none; }
+  li b.warn { color: var(--accent); }
+  li span { color: var(--text); opacity: 0.85; }
+</style>
+</head>
+<body>
+<header>
+  <svg viewBox="0 0 120 120" aria-hidden="true"><polygon points="60,14 20.163,37 20.163,83 60,106 99.837,83 99.837,37" fill="none" stroke="#f0ac5f" stroke-width="9" stroke-linejoin="round"/><path d="M43.44,41.6 L66.44,60 L43.44,78.4" fill="none" stroke="#5cd0b3" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="80.24" cy="60" r="5.06" fill="#f0ac5f"/></svg>
+  <div>
+    <h1>Acme deploy status</h1>
+    <div class="sub">edge fleet &middot; region eu-west</div>
+  </div>
+  <span class="pill" id="pill" data-state="ok"><span class="dot"></span><span id="pill-label">Healthy</span></span>
+</header>
+
+<div class="grid">
+  <div class="card"><div class="k">Deploys today</div><div class="v accent" id="deploys">18</div></div>
+  <div class="card"><div class="k">Build queue</div><div class="v" id="queue">0</div></div>
+  <div class="card"><div class="k">Uptime</div><div class="v teal" id="uptime">99.98%</div></div>
+  <div class="card"><div class="k">Release</div><div class="v" id="release" style="font-size:20px">v4.2.<span id="patch">7</span></div></div>
+</div>
+
+<div class="bar"><i id="bar"></i></div>
+
+<div class="row">
+  <button class="primary" id="deploy">Deploy</button>
+  <button id="rollback">Roll back</button>
+  <button id="reset">Reset</button>
+</div>
+
+<ol id="log" aria-live="polite"></ol>
+
+<script>
+(function () {
+  var START = { deploys: 18, patch: 7 };
+  var el = function (id) { return document.getElementById(id); };
+  var state = { deploys: START.deploys, patch: START.patch, busy: false, clock: 0 };
+
+  function stamp () {
+    state.clock += 7 + (state.deploys % 5);
+    var m = Math.floor(state.clock / 60) % 60;
+    var s = state.clock % 60;
+    return ("0" + (9 + Math.floor(state.clock / 3600))).slice(-2) + ":" +
+           ("0" + m).slice(-2) + ":" + ("0" + s).slice(-2);
+  }
+
+  function log (kind, msg) {
+    var li = document.createElement("li");
+    var t = document.createElement("time");
+    t.textContent = stamp();
+    var b = document.createElement("b");
+    if (kind === "warn") b.className = "warn";
+    b.textContent = kind === "warn" ? "WARN" : "OK";
+    var s = document.createElement("span");
+    s.textContent = msg;
+    li.appendChild(t); li.appendChild(b); li.appendChild(s);
+    var list = el("log");
+    list.insertBefore(li, list.firstChild);
+    while (list.children.length > 24) list.removeChild(list.lastChild);
+  }
+
+  function paint () {
+    el("deploys").textContent = state.deploys;
+    el("patch").textContent = state.patch;
+    el("queue").textContent = state.busy ? 1 : 0;
+    el("pill").dataset.state = state.busy ? "busy" : "ok";
+    el("pill-label").textContent = state.busy ? "Deploying" : "Healthy";
+    el("deploy").disabled = state.busy;
+    el("rollback").disabled = state.busy || state.patch <= 0;
+  }
+
+  function march (done) {
+    state.busy = true; paint();
+    var pct = 0;
+    var timer = setInterval(function () {
+      pct += 7;
+      el("bar").style.width = Math.min(pct, 100) + "%";
+      if (pct >= 100) {
+        clearInterval(timer);
+        setTimeout(function () {
+          el("bar").style.width = "0%";
+          state.busy = false;
+          done();
+          paint();
+        }, 220);
+      }
+    }, 45);
+  }
+
+  el("deploy").addEventListener("click", function () {
+    march(function () {
+      state.deploys += 1;
+      state.patch += 1;
+      el("uptime").textContent = "99.9" + (8 - (state.deploys % 3)) + "%";
+      log("ok", "rolled out v4.2." + state.patch + " to 6 edge nodes");
+    });
+  });
+
+  el("rollback").addEventListener("click", function () {
+    march(function () {
+      state.patch = Math.max(0, state.patch - 1);
+      log("warn", "reverted to v4.2." + state.patch + ", draining connections");
+    });
+  });
+
+  el("reset").addEventListener("click", function () {
+    state.deploys = START.deploys;
+    state.patch = START.patch;
+    state.clock = 0;
+    el("uptime").textContent = "99.98%";
+    el("log").innerHTML = "";
+    log("ok", "console reset, fleet nominal");
+    paint();
+  });
+
+  log("ok", "health probe green on 6/6 nodes");
+  log("ok", "cache warmed, 42 slides precompiled");
+  paint();
+})();
+</script>
+</body>
+</html>

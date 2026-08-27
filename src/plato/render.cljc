@@ -176,3 +176,20 @@
   "Hiccup element for a node via a render target (the IRenderTarget seam)."
   [target g nd]
   (p/-element target g nd))
+
+(defn- node-group
+  [target g frame id]
+  [:g {:key (str id)}
+   (p/-apply target
+             (p/-element target g (sc/node g id))
+             (get frame id {}))])
+
+(defn scene-svg
+  "Hiccup <svg> for graph g at frame, drawing node-ids in order through target."
+  [target g frame node-ids]
+  (into
+   [:svg {:viewBox (str "0 0 " geo/view-w " " geo/view-h)
+          :preserveAspectRatio "xMidYMid meet"
+          :role "img"
+          :aria-label (str (sc/scene-name g))}]
+   (map #(node-group target g frame %) node-ids)))

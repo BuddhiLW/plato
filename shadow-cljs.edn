@@ -1,9 +1,17 @@
-{:source-paths ["src" "examples"]
+{:source-paths ["src" "examples" "test"]
  :dependencies [[reagent "2.0.1"]]
  :dev-http {8080 "public"}
  :builds
- {:app {:target :browser
-        :output-dir "public/js"
-        :asset-path "/js"
-        :modules {:main {:init-fn plato.example.core/init}}
-        :devtools {:watch-dir "public"}}}}
+ {:e2e  {:target :node-script
+         :output-to "target/e2e.js"
+         :main plato.e2e/-main}
+  :app  {:target :browser
+         :output-dir "public/js"
+         :asset-path "/js"
+         :modules {:main {:init-fn plato.example.core/init}}
+         :devtools {:watch-dir "public"}}
+  :acme {:target :browser
+         :output-dir "public/acme/js"
+         :asset-path "/acme/js"
+         :modules {:main {:init-fn plato.acme.core/init}}
+         :devtools {:watch-dir "public"}}}}

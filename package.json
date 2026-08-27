@@ -10,10 +10,16 @@
   },
   "scripts": {
     "assets": "node scripts/copy-assets.mjs",
-    "dev": "npm run assets && shadow-cljs watch app",
-    "build": "npm run assets && shadow-cljs release app",
+    "dev": "npm run assets && shadow-cljs watch app acme",
+    "build": "npm run assets && shadow-cljs release app acme",
     "test": "clojure -M:test",
-    "check": "npm run test && npm run build"
+    "e2e": "npm run build && shadow-cljs release e2e && node target/e2e.js",
+    "check": "npm run test && npm run build",
+    "fixtures": "node scripts/gen-fixtures.mjs",
+    "cli": "clojure -M:cli",
+    "export": "clojure -M:cli build",
+    "cli:native": "bash scripts/build-cli.sh",
+    "theme": "clojure -M:cli theme theme/plato.tokens.edn -o public/css/plato-theme.css --json theme/plato.tokens.json --cljc src/plato/theme.cljc"
   },
   "dependencies": {
     "react": "19.2.8",
@@ -21,6 +27,7 @@
     "reveal.js": "6.0.1"
   },
   "devDependencies": {
+    "playwright": "^1.62.1",
     "shadow-cljs": "3.4.12"
   }
 }

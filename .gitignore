@@ -3,8 +3,10 @@
 /.nrepl-port
 /node_modules/
 /public/js/
+/public/acme/js/
 /public/vendor/
 /target/
+/dist/
 .DS_Store
 
 /.clj-kondo/.cache/

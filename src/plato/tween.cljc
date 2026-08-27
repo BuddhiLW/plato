@@ -26,8 +26,8 @@
 ;; ── pure sRGB hex lerp (reader-conditional ONLY for the parse) ───────────────
 (defn- hex->rgb [h]
   (let [h (if (str/starts-with? h "#") (subs h 1) h)
-        p (fn [i] #?(:clj  (Integer/parseInt (subs h i (+ i 2)) 16)
-                     :cljs (js/parseInt      (subs h i (+ i 2)) 16)))]
+        p (fn [i] #?(:cljs    (js/parseInt      (subs h i (+ i 2)) 16)
+                     :default (Integer/parseInt (subs h i (+ i 2)) 16)))]
     [(p 0) (p 2) (p 4)]))
 
 (defn- byte->hex [n]

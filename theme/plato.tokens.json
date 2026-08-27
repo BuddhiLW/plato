@@ -1,0 +1,154 @@
+{
+  "name": "Plato Midnight",
+  "prefix": "plato",
+  "reveal-theme": "night",
+  "tokens": {
+    "blue": {
+      "value": "#58C4DD",
+      "var": "--plato-blue"
+    },
+    "white": {
+      "value": "#FFFFFF",
+      "var": "--plato-white"
+    },
+    "purple": {
+      "value": "#9A72AC",
+      "var": "--plato-purple"
+    },
+    "gap": {
+      "value": "1rem",
+      "var": "--plato-gap"
+    },
+    "gold": {
+      "value": "#F0AC5F",
+      "var": "--plato-gold"
+    },
+    "muted": {
+      "value": "#9aa7b5",
+      "var": "--plato-muted"
+    },
+    "grey": {
+      "value": "#8A8F98",
+      "var": "--plato-grey"
+    },
+    "orange": {
+      "value": "#FF862F",
+      "var": "--plato-orange"
+    },
+    "mono": {
+      "value": "ui-monospace, SFMono-Regular, \"JetBrains Mono\", Menlo, monospace",
+      "var": "--plato-mono"
+    },
+    "info": {
+      "value": "#5fb4f0",
+      "var": "--plato-info"
+    },
+    "radius": {
+      "value": "0.65rem",
+      "var": "--plato-radius"
+    },
+    "warn": {
+      "value": "#f0ac5f",
+      "var": "--plato-warn"
+    },
+    "sans": {
+      "value": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "var": "--plato-sans"
+    },
+    "media-max": {
+      "value": "400px",
+      "var": "--plato-media-max"
+    },
+    "gray": {
+      "value": "#8A8F98",
+      "var": "--plato-gray"
+    },
+    "yellow": {
+      "value": "#FFFF3B",
+      "var": "--plato-yellow"
+    },
+    "row-alt": {
+      "value": "rgba(255, 255, 255, 0.028)",
+      "var": "--plato-row-alt"
+    },
+    "pink": {
+      "value": "#FF69B4",
+      "var": "--plato-pink"
+    },
+    "teal": {
+      "value": "#5CD0B3",
+      "var": "--plato-teal"
+    },
+    "green": {
+      "value": "#83C167",
+      "var": "--plato-green"
+    },
+    "red": {
+      "value": "#FC6255",
+      "var": "--plato-red"
+    },
+    "code-max": {
+      "value": "320px",
+      "var": "--plato-code-max"
+    },
+    "radius-lg": {
+      "value": "0.75rem",
+      "var": "--plato-radius-lg"
+    },
+    "line": {
+      "value": "#273140",
+      "var": "--plato-line"
+    },
+    "black": {
+      "value": "#000000",
+      "var": "--plato-black"
+    },
+    "fg": {
+      "value": "#edf2f7",
+      "var": "--plato-fg"
+    },
+    "panel": {
+      "value": "#141a22",
+      "var": "--plato-panel"
+    },
+    "bg": {
+      "value": "#0b0e13",
+      "var": "--plato-bg"
+    },
+    "ok": {
+      "value": "#5fd39a",
+      "var": "--plato-ok"
+    },
+    "accent": {
+      "value": "#f0ac5f",
+      "var": "--plato-accent"
+    },
+    "scene-max": {
+      "value": "440px",
+      "var": "--plato-scene-max"
+    },
+    "line-strong": {
+      "value": "#2a3544",
+      "var": "--plato-line-strong"
+    }
+  },
+  "scene": {
+    "palette": [
+      "teal",
+      "gold",
+      "grey",
+      "gray",
+      "red",
+      "yellow",
+      "white",
+      "blue",
+      "green",
+      "purple",
+      "orange",
+      "pink",
+      "black"
+    ],
+    "background": "bg",
+    "fallback": "grey"
+  }
+}

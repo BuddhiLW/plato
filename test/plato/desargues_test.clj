@@ -1,6 +1,7 @@
 (ns plato.desargues-test
   (:require [clojure.test :refer [deftest is]]
-            [plato.desargues :as desargues]))
+            [plato.desargues :as desargues]
+            [plato.content :as content]))
 
 (def graph
   {:scene :demo
@@ -37,3 +38,18 @@
     (is (= graph (:graph content)))
     (is (true? (:autoplay? content)))
     (is (false? (:controls? content)))))
+
+(deftest static-projection-renders-svg
+  (let [[tag svg] (content/render (desargues/scene graph))
+        [svg-tag svg-attrs & groups] svg]
+    (is (= :div.plato-scene tag))
+    (is (= :svg svg-tag))
+    (is (= ":demo" (:aria-label svg-attrs)))
+    (is (= (count (:nodes graph)) (count groups)))
+    (is (= [:g] (distinct (map first groups))))))
+
+(deftest static-projection-covers-every-node
+  (let [[_ svg] (content/render (desargues/scene layout-graph))
+        groups (drop 2 svg)]
+    (is (= (count (:nodes layout-graph)) (count groups)))
+    (is (= :text (first (nth (first groups) 2))))))

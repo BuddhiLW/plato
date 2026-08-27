@@ -1,0 +1,341 @@
+(ns plato.cli
+  "Command line: render a Markdown or Org source into a standalone Reveal page,
+   and generate theme artifacts from a token source.
+
+   Argument parsing and job execution are pure; only `-main` touches the
+   filesystem, stdout and the exit code."
+  (:require [clojure.edn :as edn]
+            [clojure.string :as str]
+            [plato.deck :as deck]
+            [plato.html :as html]
+            [plato.markdown :as markdown]
+            [plato.org :as org]
+            [plato.tokens :as tokens]))
+
+(def usage
+  (str/join
+   "\n"
+   ["plato — data-driven presentations"
+    ""
+    "  plato build <source.md|source.org> [options]"
+    "  plato build --deck <ns/var> --out <path> [options]"
+    "  plato theme <tokens.edn> [options]"
+    "  plato help | version"
+    ""
+    "build options"
+    "  -o, --out <path>        output HTML (default: the source with a .html suffix)"
+    "      --deck <ns/var>     build the deck a var holds instead of a source file"
+    "      --title <string>    page title (default: the deck title)"
+    "      --theme <name>      Reveal theme name (default: night)"
+    "      --theme-css <path>  extra stylesheet to link, as authored"
+    "      --tokens <path>     token source: generates a theme CSS beside the output and links it"
+    "      --asset-base <path> prefix for vendor/ and css/ links (default: .)"
+    "      --assets <dir>      copy vendor/ and css/ from <dir> beside the page"
+    "      --math              load the math plugin (it fetches KaTeX from a CDN)"
+    "      --print             write the page to stdout instead of a file"
+    ""
+    "theme options"
+    "  -o, --out <path>        output CSS (default: the source with a .css suffix)"
+    "      --json <path>       also write the language-neutral manifest"
+    "      --cljc <path>       also write the tokens as a Clojure namespace"
+    "      --ns <symbol>       namespace for --cljc (default: plato.theme)"
+    "      --print             write the CSS to stdout instead of a file"]))
+
+(def flags
+  "Long/short option -> [key arity]. Arity 0 options are booleans."
+  {"-o" [:out 1] "--out" [:out 1]
+   "--deck" [:deck 1]
+   "--title" [:title 1]
+   "--theme" [:theme 1]
+   "--theme-css" [:theme-css 1]
+   "--tokens" [:tokens 1]
+   "--asset-base" [:asset-base 1]
+   "--assets" [:assets 1]
+   "--math" [:math? 0]
+   "--json" [:json 1]
+   "--cljc" [:cljc 1]
+   "--ns" [:ns 1]
+   "--print" [:print? 0]})
+
+(def commands
+  "Bare words that select what the CLI does."
+  {"build" :build "theme" :theme
+   "help" :help "-h" :help "--help" :help
+   "version" :version "-v" :version "--version" :version})
+
+(defn parse-args
+  "argv -> {:command keyword :input string :opts map} or {:error string}."
+  [args]
+  (loop [[arg & more] (seq args)
+         acc {:opts {}}
+         positional []]
+    (cond
+      (nil? arg)
+      (let [[command input extra] positional
+            kind (get commands command)]
+        (cond
+          (nil? command) (assoc acc :command :help)
+          (some? extra) {:error (str "Unexpected argument: " extra)}
+          (nil? kind) {:error (str "Unknown command: " command)}
+          (and (= :build kind) (nil? input) (nil? (get-in acc [:opts :deck])))
+          {:error "Command build needs a source path or --deck <ns/var>"}
+          (and (= :build kind) (get-in acc [:opts :deck]) (nil? (get-in acc [:opts :out]))
+               (not (get-in acc [:opts :print?])))
+          {:error "--deck needs --out <path> or --print"}
+          (and (= :theme kind) (nil? input))
+          {:error "Command theme needs a source path"}
+          :else (cond-> (assoc acc :command kind)
+                  input (assoc :input input))))
+
+      (contains? flags arg)
+      (let [[k arity] (get flags arg)]
+        (if (zero? arity)
+          (recur more (assoc-in acc [:opts k] true) positional)
+          (if (nil? (first more))
+            {:error (str "Option " arg " needs a value")}
+            (recur (rest more) (assoc-in acc [:opts k] (first more)) positional))))
+
+      (contains? commands arg) (recur more acc (conj positional arg))
+
+      (str/starts-with? arg "-")
+      {:error (str "Unknown option: " arg)}
+
+      :else (recur more acc (conj positional arg)))))
+
+(defn source-kind
+  "Source path -> :markdown, :org, or nil when the extension is not recognized."
+  [path]
+  (let [p (str/lower-case (str path))]
+    (cond
+      (or (str/ends-with? p ".md") (str/ends-with? p ".markdown")) :markdown
+      (str/ends-with? p ".org") :org
+      :else nil)))
+
+(defn parse-deck
+  "Source text of `kind` -> a validated deck."
+  [kind text]
+  (case kind
+    :markdown (markdown/->deck text)
+    :org (org/->deck text)
+    (throw (ex-info "Unknown source kind" {:kind kind}))))
+
+(defn- strip-extension [path]
+  (let [i (str/last-index-of (str path) ".")
+        slash (or (str/last-index-of (str path) "/") -1)]
+    (if (and i (> i slash)) (subs (str path) 0 i) (str path))))
+
+(defn- file-name [path]
+  (let [slash (str/last-index-of (str path) "/")]
+    (if slash (subs (str path) (inc slash)) (str path))))
+
+(defn- sibling
+  "Path of `name` in the same directory as `path`."
+  [path name]
+  (let [slash (str/last-index-of (str path) "/")]
+    (if slash (str (subs (str path) 0 (inc slash)) name) name)))
+
+(defn theme-css-name
+  "Token source path -> the stylesheet file name generated beside a page."
+  [path]
+  (let [base (file-name path)
+        dot (str/index-of base ".")]
+    (str (if dot (subs base 0 dot) base) "-theme.css")))
+
+(def asset-roots
+  "Directory names an exported page's :asset-base resolves to. `--assets <dir>`
+   copies these from <dir>, which is what makes the page standalone: without
+   them it links a vendor/ and css/ tree it does not carry."
+  ["vendor" "css"])
+
+(defn build-job
+  "Pure build. Takes the already-read sources; returns
+   {:files [{:path :content}] :copies [{:from :to}] :stdout string-or-nil
+    :deck deck :summary string}.
+
+   job: {:input path :text source-text :model deck :opts {...} :tokens-text edn-string}
+   `:model` wins over `:text`; otherwise the source kind comes from `:input`."
+  [{:keys [input text model opts tokens-text token-maps]}]
+  (let [kind (when-not model (source-kind input))
+        _ (when (and (not model) (nil? kind))
+            (throw (ex-info (str "Unsupported source extension: " input)
+                            {:input input})))
+        model (or model (parse-deck kind text))
+        out (or (:out opts) (str (strip-extension input) ".html"))
+        theme-tokens (cond
+                       (seq token-maps) (tokens/assert-tokens! (tokens/compose token-maps))
+                       tokens-text (tokens/assert-tokens!
+                                    (tokens/parse (:tokens opts) tokens-text)))
+        sheet (when theme-tokens (theme-css-name (:tokens opts)))
+        sheets (vec (remove nil? [(:theme-css opts) sheet]))
+        page (html/deck->html
+              model
+              (cond-> {:stylesheets sheets}
+                (:title opts) (assoc :title (:title opts))
+                (:math? opts) (assoc :math? true)
+                (:asset-base opts) (assoc :asset-base (:asset-base opts))
+                (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))
+                (assoc :theme (or (:theme opts)
+                                  (get-in theme-tokens [:meta :reveal-theme])))))
+        files (cond-> []
+                theme-tokens (conj {:path (sibling out sheet)
+                                    :content (tokens/css theme-tokens (:tokens opts))})
+                (not (:print? opts)) (conj {:path out :content page}))
+        copies (when (and (:assets opts) (not (:print? opts)))
+                 (mapv (fn [root] {:from (str (:assets opts) "/" root)
+                                   :to (sibling out root)})
+                       asset-roots))]
+    {:files files
+     :copies (vec copies)
+     :stdout (when (:print? opts) page)
+     :deck model
+     :summary (str/join
+               "\n"
+               (concat
+                (map (fn [{:keys [path content]}]
+                       (str "wrote " path " (" (count content) " bytes"
+                            (when (= path out)
+                              (str ", " (count (deck/leaf-slides model)) " slides"))
+                            ")"))
+                     files)
+                (map (fn [{:keys [from to]}] (str "copied " from " -> " to))
+                     copies)))}))
+
+(defn theme-job
+  "Pure theme generation.
+
+   job: {:input path :text source-text :token-maps [base ... child] :opts {...}}
+   `:token-maps` is the resolved :extends chain, base first; it wins over
+   `:text`, which is the single-file case."
+  [{:keys [input text opts token-maps]}]
+  (let [tk (tokens/assert-tokens! (if (seq token-maps)
+                                    (tokens/compose token-maps)
+                                    (tokens/parse input text)))
+        out (or (:out opts) (str (strip-extension input) ".css"))
+        css (tokens/css tk input)
+        ns-sym (symbol (or (:ns opts) "plato.theme"))
+        files (cond-> []
+                (not (:print? opts)) (conj {:path out :content css})
+                (:json opts) (conj {:path (:json opts) :content (tokens/json tk)})
+                (:cljc opts) (conj {:path (:cljc opts)
+                                    :content (tokens/cljc tk ns-sym input)}))]
+    {:files files
+     :stdout (when (:print? opts) css)
+     :summary (str/join "\n"
+                        (map (fn [{:keys [path content]}]
+                               (str "wrote " path " (" (count content) " bytes)"))
+                             files))}))
+
+(def version "0.1.0")
+
+;; ── I/O boundary ────────────────────────────────────────────────────────────
+
+(defn- read-source [path]
+  #?(:cljs nil
+     :default (slurp path)))
+
+(defn- write-file! [path content]
+  #?(:cljs nil
+     :default (do (when-let [parent (.getParentFile (java.io.File. ^String path))]
+                    (.mkdirs parent))
+                  (spit path content))))
+
+(defn deck-from-var
+  "\"ns/var\" -> the validated deck it holds. A var holding a 0-arg fn is
+   called. The value is put through deck/deck here rather than downstream, so a
+   var that holds something else fails by name instead of deep in the renderer."
+  [reference]
+  #?(:cljs nil
+     :default
+     (let [sym (symbol reference)
+           _ (when-not (namespace sym)
+               (throw (ex-info (str "--deck needs a namespaced var: " reference)
+                               {:deck reference})))
+           v (try (requiring-resolve sym)
+                  (catch Exception e
+                    (throw (ex-info (str "Cannot load " reference ": " (ex-message e))
+                                    {:deck reference}))))
+           _ (when-not v
+               (throw (ex-info (str "Cannot resolve deck var: " reference)
+                               {:deck reference})))
+           value (deref v)
+           value (if (fn? value) (value) value)]
+       (when-not (map? value)
+         (throw (ex-info (str "Deck var " reference " does not hold a deck")
+                         {:deck reference})))
+       (deck/deck value))))
+
+(defn- relative-to
+  "`other` resolved against the file `path`, unless it is already absolute."
+  [path other]
+  (if (str/starts-with? (str other) "/") (str other) (sibling path other)))
+
+(defn- token-chain
+  "Read the theme at `path` and every theme it :extends, base first. A relative
+   :extends resolves against the file that declares it."
+  [path]
+  (loop [path path seen #{} acc ()]
+    (when (contains? seen path)
+      (throw (ex-info (str "Theme :extends cycle at " path) {:path path})))
+    (let [tk (tokens/parse path (read-source path))
+          acc (conj acc tk)]
+      (if-let [parent (:extends tk)]
+        (recur (relative-to path parent) (conj seen path) acc)
+        (vec acc)))))
+
+(defn- copy-tree!
+  "Copy the file tree at `from` to `to`, creating directories. A missing source
+   is skipped rather than fatal: a page without vendored assets is still a page,
+   and the summary already says what was copied."
+  [from to]
+  #?(:cljs nil
+     :default
+     (let [src (java.io.File. ^String from)
+           prefix (count (.getPath src))]
+       (when (.isDirectory src)
+         (doseq [^java.io.File f (file-seq src) :when (.isFile f)]
+           (let [dest (java.io.File. (str to (subs (.getPath f) prefix)))]
+             (when-let [parent (.getParentFile dest)] (.mkdirs parent))
+             (java.nio.file.Files/copy
+              (.toPath f) (.toPath dest)
+              ^"[Ljava.nio.file.CopyOption;"
+              (into-array java.nio.file.CopyOption
+                          [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))))))))
+
+(defn- run-job
+  "Read the sources a parsed command needs, run the pure job, write its files."
+  [{:keys [command input opts]}]
+  (let [job (case command
+              :build (build-job {:input input
+                                 :text (when-not (:deck opts) (read-source input))
+                                 :model (when (:deck opts) (deck-from-var (:deck opts)))
+                                 :opts opts
+                                 :token-maps (when (:tokens opts)
+                                               (token-chain (:tokens opts)))})
+              :theme (theme-job {:input input :token-maps (token-chain input) :opts opts}))]
+    (doseq [{:keys [path content]} (:files job)]
+      (write-file! path content))
+    (doseq [{:keys [from to]} (:copies job)]
+      (copy-tree! from to))
+    (when-let [out (:stdout job)] (println out))
+    (when (seq (:summary job)) (println (:summary job)))
+    0))
+
+(defn -main [& args]
+  (let [{:keys [command error] :as parsed} (parse-args args)]
+    (cond
+      error (binding [*out* *err*]
+              (println error)
+              (println)
+              (println usage)
+              #?(:cljs nil :default (System/exit 2)))
+      (= :help command) (println usage)
+      (= :version command) (println (str "plato " version))
+      :else
+      (let [code (try
+                   (run-job parsed)
+                   (catch #?(:cljs :default :default Exception) e
+                     (binding [*out* *err*]
+                       (println (str "plato: " (or (ex-message e) e))))
+                     1))]
+        (when (pos? code)
+          #?(:cljs nil :default (System/exit code)))))))

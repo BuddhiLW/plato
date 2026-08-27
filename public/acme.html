@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Acme Corp — Q3 Product Review, the Plato flagship demo deck">
+    <title>Acme Corp — Q3 Product Review</title>
+    <link rel="stylesheet" href="./vendor/reset.css">
+    <link rel="stylesheet" href="./vendor/reveal.css">
+    <link rel="stylesheet" href="./vendor/theme/night.css">
+    <link rel="stylesheet" href="./vendor/highlight/monokai.css">
+    <link rel="stylesheet" href="./css/plato.css">
+    <link rel="stylesheet" href="./css/acme-theme.css">
+    <style>
+      .plato-backlink {
+        position: fixed;
+        left: 0.9rem;
+        bottom: 0.75rem;
+        z-index: 40;
+        font: 500 0.72rem/1 var(--plato-sans, system-ui, sans-serif);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--plato-muted, #a89e91);
+        text-decoration: none;
+        opacity: 0.55;
+      }
+      .plato-backlink:hover,
+      .plato-backlink:focus-visible {
+        color: var(--plato-accent, #f59e0b);
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <a class="plato-backlink" href="./index.html">← Plato engine example</a>
+    <script src="./acme/js/main.js"></script>
+  </body>
+</html>

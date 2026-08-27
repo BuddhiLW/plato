@@ -1,0 +1,33 @@
+;; A print/handout variant of the Acme theme.
+;;
+;; It states only what differs — every colour, scale, font and scene setting it
+;; does not mention is inherited from theme/acme.tokens.edn, which in turn is a
+;; complete theme. :rules is ordinary CSS as data, with [:token k] standing for
+;; the var() reference to token k.
+;;
+;; Regenerate: plato theme theme/acme-print.tokens.edn -o public/css/acme-print-theme.css
+{:extends "acme.tokens.edn"
+
+ :meta {:name "Acme Print"
+        :reveal-theme "white"}
+
+ :color {:bg "#ffffff"
+         :panel "#f4f1ec"
+         :fg "#1a1714"
+         :muted "#6b6257"
+         :line "#e2dbd1"
+         :line-strong "#cdc3b6"
+         :row-alt "rgba(245, 158, 11, 0.08)"}
+
+ :rules
+ [[:.reveal {:background [:token :bg]
+             :color [:token :fg]}
+   [:h1 {:color [:token :fg]}]
+   [:.plato-kicker {:color [:token :accent]
+                    :letter-spacing "0.08em"}]
+   [:.plato-note {:border-color [:token :line-strong]}]]
+
+  ["@media print"
+   [:.reveal {:font-size "11pt"}
+    [:.plato-transport {:display "none"}]
+    [:.plato-video {:display "none"}]]]]}

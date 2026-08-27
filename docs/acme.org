@@ -1,0 +1,101 @@
+#+TITLE: Acme Corp — Q3 Product Review
+#+AUTHOR: Ada Lovelace
+#+DATE: 26 August 2026
+#+THEME: night
+
+* Q3 Product Review
+:PROPERTIES:
+:BACKGROUND_IMAGE: assets/acme/hero.jpg
+:BACKGROUND_OPACITY: 0.35
+:TRANSITION: fade
+:END:
+
+Revenue, *delivery*, and the /three bets/ that carry us into [[https://acme.example/q4][Q4]].
+
+:NOTES:
+Ninety seconds of framing, then straight into the agenda.
+:END:
+
+* Agenda
+
+- Where the numbers landed
+- What shipped, and what it looks like
+- Three bets for Q4
+- Risks we are carrying
+
+:NOTES:
+Five beats. Hold questions until the risks slide.
+:END:
+
+* The Numbers
+
+| Metric | Q2 FY26 | Q3 FY26 |
+|-----------------------+---------+----------|
+| ARR | $96.0M | $118.4M |
+| Net revenue retention | 112% | 119% |
+| Gross margin | 61.0% | 65.2% |
+
+*** Follow-ups
+
+1. Book the enrichment migration window.
+2. Publish the replay retention policy.
+3. Hire two platform engineers.
+
+** Revenue Chart
+
+#+CAPTION: Booked revenue, FY26 Q1–Q3
+[[file:assets/acme/chart.png][Bar chart of booked revenue]]
+
+** Growth Loop
+
+[[file:assets/acme/loop.gif][Throughput ticker loop]]
+
+:NOTES:
+Two seconds of the live ticker, on a loop.
+:END:
+
+* The Product
+
+The replay console shipped behind a flag on 4 July and went GA in week nine.
+
+** Replay Console
+
+[[file:assets/acme/demo.mp4]]
+
+** The New Chime
+:PROPERTIES:
+:TRANSITION: zoom
+:END:
+
+[[file:assets/acme/chime.mp3]]
+
+* The Deck Is Data
+
+#+BEGIN_SRC clojure
+(deck/slide :metrics
+  (content/table ["Metric" "Q2" "Q3"]
+                 [["ARR" "$96.0M" "$118.4M"]]))
+#+END_SRC
+
+A slide is a map; ~deck/deck~ validates the whole tree.
+
+#+BEGIN_NOTES
+Two files, one deck. The markup is a front end, not the model.
+#+END_NOTES
+
+* Voice Of Customer
+
+#+BEGIN_QUOTE
+We replaced four internal dashboards with one Acme replay link.
+#+END_QUOTE
+
+* Closing
+:PROPERTIES:
+:BACKGROUND_COLOR: #12100e
+:END:
+
+Ship the replay lane. +Halve+ Quarter the cost per event.
+
+:NOTES:
+End here. Do not advance into the appendix unless asked.
+:END:
