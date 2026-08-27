@@ -13,6 +13,28 @@
 ;; of laid-out pixels, so the assertion has to run inside the page. The steps
 ;; call plato.fit in the browser runtime — one definition of "fits", shared by
 ;; the scenarios here and the authoring overlay.
+;;
+;; WHICH HARNESS IS CANONICAL
+;;
+;; Two things drive plato's fit rule, and they are not peers:
+;;
+;;   test/plato/e2e.cljs   CANONICAL. Node + Playwright over the RELEASE build
+;;                         and the static export, wired into CI as `npm run
+;;                         e2e`. A fit regression has to fail here.
+;;   this file             The local authoring loop. Runs against the DEV build
+;;                         over the shadow runtime channel, by hand, while a
+;;                         slide is being written. NOT in CI.
+;;
+;; Only the DRIVER is duplicated — both call plato.fit, so the rule itself has
+;; one definition and cannot drift. What this file buys is the runtime channel:
+;; :fit-waiver-round-trip mutates the DOM between assertions, which is how the
+;; declaration→attribute→checker seam gets proven at all, and it is far cheaper
+;; to run against a live watch than to rebuild a release.
+;;
+;; The rule that keeps this honest: a scenario here may probe deeper than CI
+;; does, but it may never be the ONLY place a rule is asserted. If a check here
+;; is the last thing standing between a defect and a green build, it belongs in
+;; e2e.cljs instead.
 {:hive.cljs/shadow {:host       "localhost"
                     :port       9637
                     :nrepl-port 7899}

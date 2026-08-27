@@ -345,6 +345,11 @@ or past the edge. An **element inside one** that cuts its own content off — a 
 presentation is not scrollable by its audience: content that needs scrolling is content nobody
 reads. An element whose overflow is `visible` is not a finding; it spills, but it stays on screen.
 
+The gate you have to satisfy is `npm run e2e` — Playwright over the release build and the static
+export, and what CI runs. The `:fit` scenarios in `hive-cljs.edn` are the loop for writing a slide,
+not a second gate: they run against the dev build over the shadow runtime channel, and never assert
+anything CI does not.
+
 ### Saying an overflow is deliberate
 
 A full-bleed image, or a deliberately long listing the presenter scrolls, is not a defect. Declare
