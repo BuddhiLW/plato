@@ -8,7 +8,8 @@
   (:require [clojure.string :as str]
             [plato.content :as content]
             [plato.doc :as doc]
-            [plato.text :as text]))
+            [plato.text :as text]
+            [plato.source :as source]))
 
 (def video-extensions #{"mp4" "webm" "ogv" "mov" "m4v"})
 (def audio-extensions #{"mp3" "wav" "ogg" "m4a" "flac"})
@@ -488,3 +489,7 @@
   "Markdown text -> a validated plato.deck/deck."
   ([text] (doc/document->deck (parse text)))
   ([text opts] (doc/document->deck (parse text) opts)))
+
+(source/register-extensions! :markdown ["md" "markdown"])
+
+(defmethod source/->deck :markdown [_ text] (->deck text))

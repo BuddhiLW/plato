@@ -9,7 +9,8 @@
    =verbatim= ~code~ +strike+."
   (:require [clojure.string :as str]
             [plato.content :as content]
-            [plato.doc :as doc]))
+            [plato.doc :as doc]
+            [plato.source :as source]))
 
 (def image-extensions #{"png" "jpg" "jpeg" "gif" "svg" "webp" "avif" "bmp"})
 (def video-extensions #{"mp4" "webm" "ogv" "mov" "m4v"})
@@ -563,3 +564,7 @@
   "Org text -> a validated plato.deck/deck."
   ([text] (doc/document->deck (parse text)))
   ([text opts] (doc/document->deck (parse text) opts)))
+
+(source/register-extensions! :org ["org"])
+
+(defmethod source/->deck :org [_ text] (->deck text))

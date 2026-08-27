@@ -1,15 +1,22 @@
 (ns plato.cli
-  "Command line: render a Markdown or Org source into a standalone Reveal page,
-   and generate theme artifacts from a token source.
+  "Command line: render a deck source into a standalone Reveal page, and
+   generate theme artifacts from a token source.
 
    Argument parsing and job execution are pure; only `-main` touches the
-   filesystem, stdout and the exit code."
+   filesystem, stdout and the exit code.
+
+   Which source formats exist is not decided here — `plato.markdown`,
+   `plato.org` and `plato.data` are required so that the `plato.source` methods
+   they install are present, and a front end outside plato joins the CLI the
+   same way."
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
+            [plato.data]
             [plato.deck :as deck]
             [plato.html :as html]
-            [plato.markdown :as markdown]
-            [plato.org :as org]
+            [plato.markdown]
+            [plato.org]
+            [plato.source :as source]
             [plato.tokens :as tokens]
             #?(:clj [clojure.java.io :as io])))
 
@@ -103,23 +110,6 @@
 
       :else (recur more acc (conj positional arg)))))
 
-(defn source-kind
-  "Source path -> :markdown, :org, or nil when the extension is not recognized."
-  [path]
-  (let [p (str/lower-case (str path))]
-    (cond
-      (or (str/ends-with? p ".md") (str/ends-with? p ".markdown")) :markdown
-      (str/ends-with? p ".org") :org
-      :else nil)))
-
-(defn parse-deck
-  "Source text of `kind` -> a validated deck."
-  [kind text]
-  (case kind
-    :markdown (markdown/->deck text)
-    :org (org/->deck text)
-    (throw (ex-info "Unknown source kind" {:kind kind}))))
-
 (defn- strip-extension [path]
   (let [i (str/last-index-of (str path) ".")
         slash (or (str/last-index-of (str path) "/") -1)]
@@ -156,11 +146,12 @@
    job: {:input path :text source-text :model deck :opts {...} :tokens-text edn-string}
    `:model` wins over `:text`; otherwise the source kind comes from `:input`."
   [{:keys [input text model opts tokens-text token-maps]}]
-  (let [kind (when-not model (source-kind input))
+  (let [kind (when-not model (source/kind input))
         _ (when (and (not model) (nil? kind))
             (throw (ex-info (str "Unsupported source extension: " input)
-                            {:input input})))
-        model (or model (parse-deck kind text))
+                            {:input input
+                             :known (sort (keys (source/known-extensions)))})))
+        model (or model (source/->deck kind text))
         out (or (:out opts) (str (strip-extension input) ".html"))
         theme-tokens (cond
                        (seq token-maps) (tokens/assert-tokens! (tokens/compose token-maps))

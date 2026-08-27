@@ -31,12 +31,6 @@
   (is (str/includes? (:error (cli/parse-args ["build" "a.md" "--nope"])) "Unknown option"))
   (is (str/includes? (:error (cli/parse-args ["build" "a.md" "b.md" "c.md"])) "Unexpected")))
 
-(deftest source-kind-reads-the-extension
-  (is (= :markdown (cli/source-kind "a.md")))
-  (is (= :markdown (cli/source-kind "A.MARKDOWN")))
-  (is (= :org (cli/source-kind "deck/talk.org")))
-  (is (nil? (cli/source-kind "talk.txt"))))
-
 (deftest theme-css-name-drops-every-extension
   (is (= "acme-theme.css" (cli/theme-css-name "theme/acme.tokens.edn")))
   (is (= "plato-theme.css" (cli/theme-css-name "plato.tokens.edn")))
