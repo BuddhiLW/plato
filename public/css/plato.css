@@ -16,6 +16,15 @@
    reveal's elements keep the sizing reveal.css assumes for them. */
 [class*="plato-"] { box-sizing: border-box; }
 
+/* A slide that declares {:overflow :shrink} is painted at whatever scale
+   plato.fit measured it needs. `scale` rather than `transform`: Reveal writes
+   `transform` on the section for slide transitions, and the two would clobber
+   each other — the individual property composes with it instead. The property
+   name is plato.fit/scale-property; fit_test.clj asserts the two agree. */
+.reveal .slides section[data-plato-overflow="shrink"] {
+  scale: var(--plato-fit-scale, 1);
+}
+
 html, body, #app {
   width: 100%;
   height: 100%;

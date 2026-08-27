@@ -12,10 +12,11 @@
    answer this without a layout engine, so plato asks the one that will render
    the deck instead of modelling a second one.
 
-   A slide may overflow deliberately: `{:overflow :allow}` in the slide options
-   is projected to `data-plato-overflow` on its <section>, so the checker reads
-   the intent off the DOM and works the same against the live shell and the
-   static export."
+   A slide may answer for its overflow: `{:overflow :allow}` declares it
+   deliberate, `{:overflow :shrink}` asks plato to scale the slide down until it
+   fits. Either is projected to `data-plato-overflow` on the <section>, so the
+   checker reads the author's intent off the DOM and needs no reference to the
+   deck that built the page."
   (:require [clojure.string :as str]
             [plato.deck :as deck]))
 
@@ -29,6 +30,42 @@
    overflow it does not have. Measured across plato's two decks, real defects
    start two orders of magnitude above this; every 1-2px reading was rounding."
   2)
+
+(def min-scale
+  "The smallest scale a slide may be shrunk to before shrinking stops being a
+   remedy.
+
+   A slide is laid out in a 960x700 box whose body text is 28px, so 0.6 renders
+   it at under 17px once the box is scaled to a projector. Past that the slide
+   fits and nobody at the back of the room can read it, which is a worse outcome
+   than the build failing."
+  0.6)
+
+(defn fit-scale
+  "Measurement -> the uniform scale that brings the slide inside its box, or 1
+   when it already fits.
+
+   Exact rather than searched: the scale is applied through CSS `scale`, which
+   never reflows, so a slide's painted size is its measured size times this
+   factor and one division answers it."
+  [{:keys [box slide]}]
+  (min 1.0
+       (double (/ (:h box) (max 1 (:h slide))))
+       (double (/ (:w box) (max 1 (:w slide))))))
+
+(def scale-property
+  "The CSS custom property a shrunk slide's scale is written to.
+
+   Declared in every dialect although only ClojureScript writes it, so that a
+   JVM test can hold the stylesheet to it: public/css/plato.css reads it back as
+   `scale: var(--plato-fit-scale, 1)`, and the two agreeing is the whole reason
+   a measured scale reaches the page.
+
+   The independent `scale` property rather than `transform`: Reveal writes
+   `transform` on a section for slide transitions, and the two would clobber
+   each other. `scale` composes with it, and scales text, media and nested
+   scenes alike."
+  "--plato-fit-scale")
 
 (defn- over
   "A dimension finding, or nil when the excess is within tolerance."
@@ -59,19 +96,28 @@
   "Measurement -> what to do about it.
 
    :ok            fits, and claimed nothing
-   :overflows     overflows without saying so — the failure
-   :waived        overflows, and the slide declared it
-   :stale-waiver  declared an overflow it no longer has, so the waiver now
-                  only hides the next real one"
-  [{:keys [waived?] :as measurement}]
-  (let [fs (findings measurement)]
-    {:id (:id measurement)
-     :state (cond
-              (and (seq fs) waived?) :waived
-              (seq fs) :overflows
-              waived? :stale-waiver
-              :else :ok)
-     :findings fs}))
+   :overflows     overflows in a way nothing declared, or that shrinking cannot
+                  repair — the failure
+   :waived        overflows, and the slide declared {:overflow :allow}
+   :shrunk        overflows, declared {:overflow :shrink}, and fits at :scale
+   :too-small     declared {:overflow :shrink}, but fitting would take it under
+                  min-scale — shrinking is no longer a remedy
+   :stale-waiver  declared a policy for an overflow it no longer has, so the
+                  declaration now only hides the next real one"
+  [{:keys [policy] :as measurement}]
+  (let [fs (findings measurement)
+        clipped? (boolean (some (comp #{:clipped} :kind) fs))
+        scale (fit-scale measurement)]
+    (merge {:id (:id measurement) :findings fs}
+           (cond
+             (empty? fs) {:state (if policy :stale-waiver :ok)}
+             (= :allow policy) {:state :waived}
+             (not= :shrink policy) {:state :overflows}
+             ;; Scaling a section scales its clipped descendants with it, so the
+             ;; ratio that cuts the content off survives at every scale.
+             clipped? {:state :overflows}
+             (< scale min-scale) {:state :too-small :scale scale}
+             :else {:state :shrunk :scale scale}))))
 
 ;; ── reporting ───────────────────────────────────────────────────────────────
 
@@ -83,18 +129,29 @@
                   (when (> over-w tolerance) (str ", " over-w "px of it horizontally"))
                   (when (> over-h tolerance) (str ", " over-h "px of it vertically")))))
 
+(defn- percent
+  "Scale -> a whole-percent string. Author-facing: nobody acts on a third
+   decimal place of a font scale."
+  [scale]
+  (str (int (Math/round (* 100.0 (double scale)))) "%"))
+
 (defn explain
   "Verdicts -> a human-readable report of the ones that are not fine, or nil
    when every slide is. The message a build failure prints, so it names the
    slide, what overflowed, and by how much."
   [verdicts]
-  (let [bad (remove (comp #{:ok :waived} :state) verdicts)]
+  (let [bad (remove (comp #{:ok :waived :shrunk} :state) verdicts)]
     (when (seq bad)
       (str/join
        "\n"
-       (for [{:keys [id state findings]} bad]
-         (if (= :stale-waiver state)
-           (str "  " id " — declares {:overflow :allow} but now fits; drop the waiver")
+       (for [{:keys [id state findings scale]} bad]
+         (case state
+           :stale-waiver
+           (str "  " id " — declares an :overflow policy but now fits; drop it")
+           :too-small
+           (str "  " id " — would have to shrink to " (percent scale)
+                " to fit, under the readable floor of " (percent min-scale)
+                "; cut content rather than shrink it")
            (str "  " id " — " (str/join "; " (map describe findings)))))))))
 
 ;; ── measuring ───────────────────────────────────────────────────────────────
@@ -178,8 +235,15 @@
    (defn- measure-section [box ^js sec]
      {:id (or (not-empty (.-id sec)) "(no id)")
       :box box
+      ;; scrollWidth/scrollHeight are LAYOUT sizes, and CSS `scale` paints an
+      ;; element smaller without reflowing it. A slide plato has already shrunk
+      ;; therefore still measures at its natural size, so the verdict is the
+      ;; same one before and after the remedy is applied and `report` can be
+      ;; called at any point in the page's life.
       :slide {:w (.-scrollWidth sec) :h (.-scrollHeight sec)}
-      :waived? (some? (.getAttribute sec (name (:attr deck/overflow-waiver))))
+      :policy (some-> (.getAttribute sec (name (:attr deck/overflow-policy)))
+                      not-empty
+                      keyword)
       :clipped (clipped-in sec)}))
 
 #?(:cljs
@@ -227,14 +291,16 @@
    (defn assert-deck-fits!
      "Throw unless every slide fits, or says why it does not. The e2e gate."
      []
-     (let [verdicts (report)]
+     (let [verdicts (report)
+           tally (fn [state] (count (filter (comp #{state} :state) verdicts)))]
        (when-let [message (explain (remove (comp #{:stale-waiver} :state) verdicts))]
-         (throw (ex-info (str (count (remove (comp #{:ok :waived} :state) verdicts))
+         (throw (ex-info (str (count (remove (comp #{:ok :waived :shrunk} :state) verdicts))
                               " of " (count verdicts)
                               " slides do not fit their slide box:\n" message)
                          {:verdicts verdicts})))
        {:slides (count verdicts)
-        :waived (count (filter (comp #{:waived} :state) verdicts))})))
+        :waived (tally :waived)
+        :shrunk (tally :shrunk)})))
 
 #?(:cljs
    (defn assert-no-stale-waivers!
@@ -246,3 +312,23 @@
                               (explain stale))
                          {:stale (mapv :id stale)})))
        {:stale 0})))
+
+;; ── shrinking ───────────────────────────────────────────────────────────────
+
+#?(:cljs
+   (defn ^:export fitDeck
+     "Shrink every slide that declared {:overflow :shrink} until it fits, and
+      return the scale applied to each by id.
+
+      Idempotent: the scale is computed from layout sizes, which CSS `scale`
+      does not change, so calling this twice lands on the same number."
+     []
+     (reduce (fn [applied {:keys [id state scale]}]
+               (if-let [^js sec (and (= :shrunk state)
+                                     (.querySelector js/document
+                                                     (str "section#" (js/CSS.escape id))))]
+                 (do (.setProperty (.-style sec) scale-property (str scale))
+                     (assoc applied id scale))
+                 applied))
+             {}
+             (report))))

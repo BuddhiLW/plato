@@ -32,17 +32,22 @@
    :transition-speed
    :visibility])
 
-(def overflow-waiver
-  "The slide option that declares an overflow deliberate, and the attribute it
-   projects to.
+(def overflow-policy
+  "What a slide declares should happen when it does not fit its box, and the
+   attribute that declaration projects to.
 
    One definition with two readers: `deck` validates a slide's :overflow against
    :values, and plato.fit reads :attr back off the rendered DOM. A value that
-   fails validation can never reach the DOM to be misread there as 'not waived',
-   and the checker needs no reference to the deck that built the page."
+   fails validation can never reach the DOM to be misread there, and the checker
+   needs no reference to the deck that built the page.
+
+   :allow   the overflow is deliberate — report it and pass
+   :shrink  scale the slide down until it fits, and fail if that would take it
+            under plato.fit/min-scale
+   absent   the slide must fit as authored; not fitting fails the build"
   {:option :overflow
    :attr :data-plato-overflow
-   :values #{:allow}})
+   :values #{:allow :shrink}})
 
 (defn attr-value
   "Slide-option value -> DOM attribute value. `true` becomes the empty string."
@@ -65,7 +70,7 @@
           (cond-> {}
             (:id slide) (assoc :id (name (:id slide)))
             (:class slide) (assoc :class (:class slide))
-            (:overflow slide) (assoc (:attr overflow-waiver)
+            (:overflow slide) (assoc (:attr overflow-policy)
                                      (name (:overflow slide))))
           reveal-data-keys))
 
@@ -127,7 +132,7 @@
                    (invalid-overflow (:slides entry))
                    (let [declared (:overflow entry)]
                      (when (and declared
-                                (not (contains? (:values overflow-waiver) declared)))
+                                (not (contains? (:values overflow-policy) declared)))
                        [[(:id entry) declared]]))))
                entries)))
 
@@ -155,7 +160,7 @@
     (when (seq duplicates)
       (throw (ex-info "Duplicate slide ids" {:ids duplicates})))
     (when (seq bad-overflow)
-      (throw (ex-info (str ":overflow accepts " (pr-str (:values overflow-waiver))
+      (throw (ex-info (str ":overflow accepts " (pr-str (:values overflow-policy))
                            " — a slide cannot waive a fit check with a value the"
                            " checker will not recognise")
                       {:slides bad-overflow})))

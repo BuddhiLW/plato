@@ -361,6 +361,48 @@ checker reads the intent off the page and needs no reference to the deck that pr
 A waiver on a slide that *now fits* is itself reported. Otherwise it stays behind after the content
 shrinks and hides the next real overflow.
 
+### Letting plato shrink the slide instead
+
+`:allow` says *print it anyway*. The other answer is *make it fit*:
+
+~~~clojure
+(deck/slide :dense-table (table-of-everything) {:overflow :shrink})
+~~~
+
+plato measures the slide once Reveal has laid it out, works out the scale that brings it inside the
+box, and writes it to the section as a CSS custom property. It is one division, not a search: the
+scale is applied through the CSS `scale` property, which never reflows, so the painted size is the
+measured size times the factor exactly. `scale` rather than `transform` because Reveal writes
+`transform` on that same element for slide transitions — the two compose instead of clobbering each
+other, and everything inside scales together: text, images and Desargues scenes alike.
+
+Two things `:shrink` deliberately will not do:
+
+- **Shrink past readability.** Below `plato.fit/min-scale` (0.6) the slide fits and nobody at the
+  back of the room can read it, so the build fails and names the scale it would have needed. Cut
+  content instead.
+- **Repair a clipped element.** When a slide is cut off by a child's own `overflow: hidden` rather
+  than by the box, scaling the section scales the child and its content together — the ratio that
+  loses the content survives at every scale, so it is still reported.
+
+### Fit in a static export
+
+`plato build` emits plain Reveal HTML, so for a while the exported page — the artifact you actually
+hand to a conference — was the one thing plato could not ask about fit, and a slide that declared
+`:shrink` had nothing there to shrink it.
+
+A deck that declares `:shrink` now carries `vendor/plato-fit/main.js` and starts it once Reveal has
+laid the page out. That bundle is the *same* `plato.fit` the live shell loads, compiled on its own,
+so an export is judged by one definition of "fits" rather than a second one written for it. Nothing
+to remember: the declaration in the deck is what pulls the runtime in.
+
+Pass `--fit` to include it in a deck that shrinks nothing, and the exported page can be asked
+`plato.fit.checkDeck()` from the console or from a browser test. A deck that neither declares
+`:shrink` nor passes `--fit` carries no extra script at all.
+
+The runtime lives under `vendor/`, so `--assets <dir>` copies it beside the page like any other
+vendored file.
+
 ### What this cannot do
 
 There is no compile-time answer. Whether text fits depends on font metrics, line breaking and the

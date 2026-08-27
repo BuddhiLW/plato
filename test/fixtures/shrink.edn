@@ -1,0 +1,40 @@
+;; A deck that does not fit, and says what to do about it.
+;;
+;; Exists so the STATIC EXPORT path has coverage: `plato build` emits plain
+;; Reveal HTML with no ClojureScript in it, so before the :fit bundle a slide
+;; that declared {:overflow :shrink} had nothing to shrink it and nothing could
+;; ask the page whether its slides fit. The e2e suite exports this deck and
+;; drives the result.
+;;
+;; The slide has to genuinely overflow a 960x700 box for the check to mean
+;; anything, and it has to overflow by little enough that fitting it stays above
+;; plato.fit/min-scale — a slide needing less than 60% is a :too-small, which is
+;; a different verdict and would not exercise the shrink.
+{:title "Shrink"
+ :slides
+ [{:plato/type :slide
+   :id :fits
+   ;; A [:section ...] here would nest inside the slide's own <section>, which
+   ;; is how a vertical stack is spelled — the id would land on the container
+   ;; and the leaf plato.fit measures would have none.
+   :content [:div [:h2 "This one fits"] [:p "So nothing is scaled."]]}
+
+  {:plato/type :slide
+   :id :too-tall
+   :overflow :shrink
+   :content
+   [:div
+    [:h2 "Twelve points in a box built for seven"]
+    [:ul
+     [:li "Reveal lays a deck out in a fixed 960x700 box"]
+     [:li "and CSS-scales that box to whatever window is showing it"]
+     [:li "so whether a slide overflows is a property of the build"]
+     [:li "not of the screen it is being shown on"]
+     [:li "which is the whole reason the question can be gated at all"]
+     [:li "This slide carries more than the box holds"]
+     [:li "It says so with {:overflow :shrink}"]
+     [:li "plato measures it once the page is laid out"]
+     [:li "works out the one scale that brings it inside"]
+     [:li "and writes that to the section as a custom property"]
+     [:li "The stylesheet reads it back as the CSS scale property"]
+     [:li "which composes with the transform Reveal puts on the same element"]]]}]}

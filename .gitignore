@@ -5,6 +5,7 @@
 /public/js/
 /public/acme/js/
 /public/vendor/
+/public/e2e/
 /target/
 /dist/
 .DS_Store

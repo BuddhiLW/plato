@@ -4,10 +4,7 @@
             [plato.content :as content]
             [plato.deck :as deck]
             [plato.reveal :as reveal]
-            ;; Load-only: plato.fit answers "does this slide fit" from inside
-            ;; the running page, so it has to be in the bundle the page loads
-            ;; rather than in a test harness beside it.
-            [plato.fit]
+            [plato.fit :as fit]
             [plato.scene-view]))
 
 (defonce ^:private roots (js/WeakMap.))
@@ -52,7 +49,13 @@
       :component-did-mount
       (fn [_]
         (reset! instance
-                (reveal/create! @element (:config model) on-ready)))
+                (reveal/create! @element (:config model)
+                                ;; Reveal has laid the deck out by now, so this
+                                ;; is the first moment a slide's size is a fact
+                                ;; rather than a guess.
+                                (fn []
+                                  (fit/fitDeck)
+                                  (when on-ready (on-ready))))))
       :component-will-unmount
       (fn [_]
         (reveal/destroy! @instance)

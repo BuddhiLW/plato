@@ -62,6 +62,7 @@
   {:asset-base "."
    :theme "night"
    :math? false
+   :fit? false
    :stylesheets []
    :scripts []})
 
@@ -98,14 +99,40 @@
   [opts]
   (mapv :global (active-plugins opts)))
 
+(def fit-runtime
+  "The standalone plato.fit bundle, relative to :asset-base, and the call that
+   starts it. Built by the shadow :fit target — the SAME plato.fit the Reagent
+   shell loads, compiled on its own, so an exported page judges fit by one
+   definition rather than a second one written for it."
+  {:src "/vendor/plato-fit/main.js"
+   :call "plato.fit.fitDeck();"})
+
+(defn needs-fit-runtime?
+  "Does this deck have to carry plato.fit to render correctly?
+
+   True when any slide declares {:overflow :shrink}: the scale that makes such a
+   slide fit is measured from a laid-out page, so an export without the runtime
+   would show the overflow the author already answered for. Read off the deck
+   rather than asked of the caller — an author who declared :shrink has said
+   everything plato needs, and a flag they could forget would silently undo it."
+  [deck]
+  (boolean (some #(= :shrink (:overflow %)) (deck/leaf-slides deck))))
+
 (defn init-script
   "Inline Reveal bootstrap source for `config`, registering the plugins `opts`
-   enables."
+   enables.
+
+   With :fit? set the bootstrap also starts plato.fit. It chains off the promise
+   `Reveal.initialize` returns rather than calling straight through: that
+   promise resolves once the deck is laid out, which is the first moment a
+   slide's size is a fact rather than a guess."
   ([config] (init-script config {}))
-  ([config opts]
+  ([config {:keys [fit?] :as opts}]
    (str "Reveal.initialize(Object.assign("
         (->json (or config {}))
-        ", {plugins: [" (str/join ", " (plugin-globals opts)) "]}));")))
+        ", {plugins: [" (str/join ", " (plugin-globals opts)) "]}))"
+        (when fit? (str ".then(function () { " (:call fit-runtime) " })"))
+        ";")))
 
 (defn- stylesheet [href]
   [:link {:rel "stylesheet" :href href}])
@@ -126,14 +153,17 @@
         stylesheets))
 
 (defn- body-hiccup [deck {:keys [asset-base scripts] :as opts}]
-  (-> [:body
-       [:div.reveal (slides-hiccup deck)]
-       [:script {:src (str asset-base "/vendor/reveal.js")}]]
-      (into (map (fn [plugin]
-                   [:script {:src (str asset-base "/vendor/plugin/" plugin ".js")}]))
-            (plugin-scripts opts))
-      (into (map (fn [src] [:script {:src src}])) scripts)
-      (conj [:script {:type "text/javascript"} (init-script (:config deck) opts)])))
+  (let [fit? (or (:fit? opts) (needs-fit-runtime? deck))
+        opts (assoc opts :fit? fit?)]
+    (-> [:body
+         [:div.reveal (slides-hiccup deck)]
+         [:script {:src (str asset-base "/vendor/reveal.js")}]]
+        (into (map (fn [plugin]
+                     [:script {:src (str asset-base "/vendor/plugin/" plugin ".js")}]))
+              (plugin-scripts opts))
+        (cond-> fit? (conj [:script {:src (str asset-base (:src fit-runtime))}]))
+        (into (map (fn [src] [:script {:src src}])) scripts)
+        (conj [:script {:type "text/javascript"} (init-script (:config deck) opts)]))))
 
 (defn deck-hiccup
   "Deck -> the whole [:html ...] document. opts: :asset-base :theme :title

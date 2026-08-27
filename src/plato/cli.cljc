@@ -40,6 +40,8 @@
     "      --asset-base <path> prefix for vendor/ and css/ links (default: .)"
     "      --assets <dir>      copy vendor/ and css/ from <dir> beside the page"
     "      --math              load the math plugin (it fetches KaTeX from a CDN)"
+    "      --fit               load plato.fit so the page can report whether its"
+    "                          slides fit; implied by any {:overflow :shrink} slide"
     "      --print             write the page to stdout instead of a file"
     ""
     "theme options"
@@ -60,6 +62,7 @@
    "--asset-base" [:asset-base 1]
    "--assets" [:assets 1]
    "--math" [:math? 0]
+   "--fit" [:fit? 0]
    "--json" [:json 1]
    "--cljc" [:cljc 1]
    "--ns" [:ns 1]
@@ -164,6 +167,7 @@
               (cond-> {:stylesheets sheets}
                 (:title opts) (assoc :title (:title opts))
                 (:math? opts) (assoc :math? true)
+                (:fit? opts) (assoc :fit? true)
                 (:asset-base opts) (assoc :asset-base (:asset-base opts))
                 (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))
                 (assoc :theme (or (:theme opts)

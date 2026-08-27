@@ -21,4 +21,13 @@
          :output-dir "public/acme/js"
          :asset-path "/acme/js"
          :modules {:main {:init-fn plato.acme.core/init}}
-         :devtools {:watch-dir "public"}}}}
+         :devtools {:watch-dir "public"}}
+  ;; plato.fit on its own, for pages that are not the Reagent shell. A static
+  ;; export is plain Reveal HTML with no ClojureScript in it, so a slide that
+  ;; declared {:overflow :shrink} had nothing to shrink it and nothing could ask
+  ;; the page whether its slides fit. This is the SAME plato.fit the shell
+  ;; loads, compiled on its own — one definition of "fits", two bundles.
+  :fit  {:target :browser
+         :output-dir "public/vendor/plato-fit"
+         :asset-path "/vendor/plato-fit"
+         :modules {:main {:entries [plato.fit]}}}}}

@@ -115,7 +115,85 @@
       :ok? nil?}
      {:name "no Acme slide waives an overflow it no longer has"
       :js "plato.fit.checkWaivers()"
-      :ok? nil?}]}])
+      :ok? nil?}]}
+
+   ;; ── shrinking ───────────────────────────────────────────────────────────
+   ;; The JVM suite proves the arithmetic and that plato.css names the property
+   ;; plato.fit writes. What only a browser can answer is whether the CSS
+   ;; `scale` those two agree on actually paints the slide smaller — Reveal
+   ;; writes `transform` on the same element, and the two composing rather than
+   ;; clobbering is the whole reason the mechanism works. So this drives the
+   ;; chain end to end on a slide made to overflow on purpose.
+   {:url "/index.html"
+    :settle 1500
+    :probes
+    ;; Only ^:export names are addressable here — this runs against the
+    ;; :advanced build, where anything else has been renamed.
+    [{:name "a slide declaring {:overflow :shrink} is painted smaller than it measures"
+      :js (str "(function(){"
+               ;; A leaf slide by id: the first `section` in the DOM may be a
+               ;; vertical stack, and a stack is a container plato.fit never
+               ;; measures.
+               "var s=document.querySelector('section#welcome');"
+               "var filler=document.createElement('div');"
+               ;; Enough to break the slide, not so much that fitting it would
+               ;; need a scale under the readable floor — a 900px filler put
+               ;; #welcome 776px over, which is a :too-small, not a :shrunk.
+               "filler.style.height='300px';"
+               "s.appendChild(filler);"
+               "var undeclared=plato.fit.checkDeck();"
+               "s.setAttribute('data-plato-overflow','shrink');"
+               "var declared=plato.fit.checkDeck();"
+               "plato.fit.fitDeck();"
+               "var painted=getComputedStyle(s).scale;"
+               ;; Dropping the attribute unmatches the rule, so the property
+               ;; left behind on the element cannot affect anything after this.
+               "s.removeChild(filler); s.removeAttribute('data-plato-overflow');"
+               "return JSON.stringify({undeclared:undeclared||'',"
+               "                       declared:declared||'',"
+               "                       painted:painted,"
+               "                       restored:plato.fit.checkDeck()||''});"
+               "})()")
+      ;; Four outcomes in one probe, so none of them can be vacuous: the filler
+      ;; really did break the slide, declaring :shrink really did answer for it,
+      ;; Reveal's own transform on that same element did not eat the scale, and
+      ;; taking the filler away puts the deck back where it started.
+      :ok? #(let [{:strs [undeclared declared painted restored]}
+                  (js->clj (js/JSON.parse %))]
+              (and (re-find #"taller than the slide box" undeclared)
+                   (= "" declared)
+                   (< 0.0 (js/parseFloat painted) 1.0)
+                   (= "" restored)))}]}
+
+   ;; ── the static export ───────────────────────────────────────────────────
+   ;; A `plato build` export is plain Reveal HTML with no ClojureScript in it,
+   ;; so it used to be the one artifact plato could not ask about fit — and it
+   ;; is the artifact a user actually ships. A deck that declares :shrink now
+   ;; carries the standalone plato.fit bundle, which is the SAME namespace the
+   ;; Reagent shell loads. Built from test/fixtures/shrink.edn by `npm run
+   ;; e2e:export`, whose slide overflows on purpose.
+   {:url "/e2e/shrink-export.html"
+    :settle 1200
+    :probes
+    [{:name "an exported deck shrinks the slide that asked to be shrunk"
+      :js (str "(function(){"
+               "var s=document.querySelector('section#too-tall');"
+               "var painted=getComputedStyle(s).scale;"
+               "var declared=plato.fit.checkDeck()||'';"
+               ;; Taking the declaration away must resurrect the overflow. If it
+               ;; does not, the slide fitted all along and the rest proves
+               ;; nothing.
+               "s.removeAttribute('data-plato-overflow');"
+               "var undeclared=plato.fit.checkDeck()||'';"
+               "s.setAttribute('data-plato-overflow','shrink');"
+               "return JSON.stringify({painted:painted,declared:declared,"
+               "                       undeclared:undeclared});"
+               "})()")
+      :ok? #(let [{:strs [painted declared undeclared]} (js->clj (js/JSON.parse %))
+                  scale (js/parseFloat painted)]
+              (and (< 0.6 scale 1.0)
+                   (= "" declared)
+                   (re-find #"too-tall" undeclared)))}]}])
 
 ;; ── static server ───────────────────────────────────────────────────────────
 

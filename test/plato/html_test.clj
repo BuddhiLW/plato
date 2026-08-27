@@ -72,6 +72,30 @@
     (is (str/includes? page "\"backgroundTransition\":\"fade\""))
     (is (str/includes? page "\"navigationMode\":\"default\""))))
 
+(deftest the-fit-runtime-rides-along-only-when-the-deck-needs-it
+  (testing "a deck nobody asked to shrink pays nothing for the feature"
+    (is (not (html/needs-fit-runtime? model)))
+    (is (not (str/includes? page (:src html/fit-runtime))))
+    (is (not (str/includes? page (:call html/fit-runtime)))))
+  (let [shrinking (deck/deck {:slides [(deck/slide :a [:p "a"])
+                                       (deck/slide :b [:p "b"] {:overflow :shrink})]})]
+    (testing "one slide declaring :shrink is enough, at any depth"
+      (is (html/needs-fit-runtime? shrinking))
+      (is (html/needs-fit-runtime?
+           (deck/deck {:slides [(deck/stack :s [(deck/slide :a [:p "a"]
+                                                            {:overflow :shrink})])]}))))
+    (testing "and the page then carries both the script and the call, because
+              the scale is measured from a laid-out page and an export without
+              the runtime would show the overflow the author answered for"
+      (let [html (html/deck->html shrinking)]
+        (is (str/includes? html (str "<script src=\"." (:src html/fit-runtime) "\">")))
+        (is (str/includes? html (:call html/fit-runtime)))
+        (testing "chained off initialize, not called beside it"
+          (is (str/includes? html (str ".then(function () { " (:call html/fit-runtime))))))))
+  (testing "--fit asks for it on a deck that does not declare :shrink, so an
+            export can be asked whether it fits even when nothing shrinks"
+    (is (str/includes? (html/deck->html model {:fit? true}) (:src html/fit-runtime)))))
+
 (deftest slide-options-become-data-attrs
   (is (str/includes? page "id=\"cover\""))
   (is (str/includes? page "data-background-image=\"assets/acme/hero.jpg\""))
