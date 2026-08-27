@@ -136,6 +136,24 @@ npm run cli:native          # -> dist/plato
 
 The native binary is built by `scripts/build-cli.sh` with [ClojureWasm](https://github.com/clojurewasm) — `cljw build -m plato.cli` — and needs no JVM at run time.
 
+The native binary produces output byte-identical to the JVM’s — same HTML, same
+stylesheets, same copied asset trees.
+
+**Two caveats on ClojureWasm 1.11.0.** Build `cljw` from source: the published
+1.11.0 crashes on `plato theme`, and the fix is already on the ClojureWasm
+`staging` branch. And set `CLJW_GC_THRESHOLD_MB` when running the binary:
+
+~~~bash
+CLJW_GC_THRESHOLD_MB=4096 ./dist/plato build talk.md -o talk.html
+~~~
+
+Without it a document past a few hundred blocks fails with an `ArityError`
+carrying a nonsensical arity, or a segfault. The cause is a garbage-collection
+timing bug in ClojureWasm’s VM call path, not in plato — a function value is
+swept while a call to it is in flight, so both never collecting
+(`CLJW_GC_THRESHOLD_MB=4096`) and collecting constantly (`=1`) avoid it, and
+which input sizes trip it depends on heap layout. Tracked in ClojureWasm.
+
 ## Theming
 
 `theme/plato.tokens.edn` is the source of truth for colors, scale and type. One command projects it to every consumer:
@@ -143,7 +161,7 @@ The native binary is built by `scripts/build-cli.sh` with [ClojureWasm](https://
 | Artifact | Consumer |
 | --- | --- |
 | `public/css/plato-theme.css` | `:root` custom properties, imported by `public/css/plato.css` |
-| `src/plato/theme.cljc` | the tokens as Clojure data — `plato.color`’s palette is derived from it |
+| `src/plato/theme.cljc` | the tokens as Clojure data, `:rules` included — `plato.color`’s palette is derived from it |
 | `theme/plato.tokens.json` | language-neutral manifest (value + CSS variable per token) |
 
 ~~~bash
@@ -189,7 +207,7 @@ home. From the REPL the same thing is a function call:
 | Front ends | `plato.doc`, `plato.markdown`, `plato.org` | CLJ/CLJS/cljw |
 | Animation core | `plato.timeline`, `plato.tween`, `plato.clock` | CLJ/CLJS/cljw |
 | Render core | `plato.render`, `plato.geometry`, `plato.hiccup`, `plato.snapshot` | CLJ/CLJS/cljw |
-| Text primitives | `plato.text` | CLJ/CLJS/cljw |
+| Text primitives | `plato.text`, `plato.nfd` | CLJ/CLJS/cljw |
 | Theming | `plato.tokens`, `plato.css`, `plato.theme`, `plato.json` | CLJ/CLJS/cljw |
 | Static export + CLI | `plato.html`, `plato.cli` | CLJ/cljw |
 | Browser shell | `plato.core`, `plato.reveal`, `plato.scene-view`, `plato.player` | CLJS |

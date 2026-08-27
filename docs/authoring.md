@@ -282,5 +282,11 @@ the math plugin, off by default because the vendored build fetches KaTeX from a 
 It needs the deck’s sources on the classpath, which the JVM (`clojure -M:cli`) and `cljw -cp` provide;
 the prebuilt binary carries only plato’s own namespaces.
 
+A build is reproducible across runtimes: the same source and the same tokens produce the same bytes
+whether the JVM or ClojureWasm ran the CLI. Two things buy that, and both are deliberate —
+`plato.hiccup/attrs->string` orders attributes itself rather than inheriting a map’s iteration order,
+and `plato.text/decompose` reads plato’s own `plato.nfd` table rather than a host normalizer. See the
+README for what still does not work on the native binary.
+
 In a static export a Desargues scene renders as its **final frame** — the same scene is a scrub-able
 player in the browser. Both projections come from one `plato.render/scene-svg`.
