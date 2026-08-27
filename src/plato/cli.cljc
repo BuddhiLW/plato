@@ -238,9 +238,24 @@
 (defn deck-from-var
   "\"ns/var\" -> the validated deck it holds. A var holding a 0-arg fn is
    called. The value is put through deck/deck here rather than downstream, so a
-   var that holds something else fails by name instead of deep in the renderer."
+   var that holds something else fails by name instead of deep in the renderer.
+
+   Deliberately NOT a plato.source method. That multimethod is an open set of
+   TEXT FORMATS: it is handed a file's contents and dispatches on the kind its
+   extension names, so a format joins by parsing a string. A var reference is
+   neither a file nor text — it is a classpath lookup — and giving it a :var
+   kind whose \"text\" is a symbol would make the multimethod's contract a lie
+   for the one member that does not honour it.
+
+   It is also the only conversion with a runtime it cannot serve: resolving a
+   var needs namespaces loaded from a classpath, and the native binary carries
+   plato's own and nothing else. A source method that silently fails on one of
+   three runtimes would be worse than a flag that is honest about what it is."
   [reference]
-  #?(:cljs nil
+  #?(:cljs
+     (throw (ex-info (str "--deck resolves a var from the classpath, which this "
+                          "runtime has no access to — build from a file instead")
+                     {:deck reference}))
      :default
      (let [sym (symbol reference)
            _ (when-not (namespace sym)
