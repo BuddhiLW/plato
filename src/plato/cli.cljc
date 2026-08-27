@@ -10,7 +10,8 @@
             [plato.html :as html]
             [plato.markdown :as markdown]
             [plato.org :as org]
-            [plato.tokens :as tokens]))
+            [plato.tokens :as tokens]
+            #?(:clj [clojure.java.io :as io])))
 
 (def usage
   (str/join
@@ -285,21 +286,23 @@
 (defn- copy-tree!
   "Copy the file tree at `from` to `to`, creating directories. A missing source
    is skipped rather than fatal: a page without vendored assets is still a page,
-   and the summary already says what was copied."
+   and the summary already says what was copied.
+
+   `tree-seq` and `clojure.java.io/copy` are the portable spelling: the JVM's
+   `file-seq` and `java.nio.file.Files` are absent from the native runtime, and
+   `io/copy` is byte-exact on both, so a vendored font survives the copy."
   [from to]
   #?(:cljs nil
      :default
-     (let [src (java.io.File. ^String from)
-           prefix (count (.getPath src))]
-       (when (.isDirectory src)
-         (doseq [^java.io.File f (file-seq src) :when (.isFile f)]
-           (let [dest (java.io.File. (str to (subs (.getPath f) prefix)))]
-             (when-let [parent (.getParentFile dest)] (.mkdirs parent))
-             (java.nio.file.Files/copy
-              (.toPath f) (.toPath dest)
-              ^"[Ljava.nio.file.CopyOption;"
-              (into-array java.nio.file.CopyOption
-                          [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))))))))
+     (let [^java.io.File src (java.io.File. ^String from)
+           prefix (count (.getPath src))
+           dir? (fn [^java.io.File f] (.isDirectory f))]
+       (when (dir? src)
+         (doseq [^java.io.File f (tree-seq dir? #(seq (.listFiles ^java.io.File %)) src)
+                 :when (.isFile f)]
+           (let [^java.io.File dest (java.io.File. (str to (subs (.getPath f) prefix)))]
+             (when-let [^java.io.File parent (.getParentFile dest)] (.mkdirs parent))
+             (io/copy f dest)))))))
 
 (defn- run-job
   "Read the sources a parsed command needs, run the pure job, write its files."
