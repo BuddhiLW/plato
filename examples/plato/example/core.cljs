@@ -1,7 +1,15 @@
 (ns plato.example.core
-  (:require [plato.core :as plato]
+  "The deck plato uses to explain itself.
+
+   It is the site at buddhilw.github.io/plato, and it is also a fixture: the
+   browser suite drives this page, so a slide that stops rendering fails CI."
+  (:require [plato.content :as content]
+            [plato.core :as plato]
             [plato.deck :as deck]
             [plato.desargues :as desargues]))
+
+;; ── scene graphs ────────────────────────────────────────────────────────────
+;; Both are the shape Desargues' RecordingBackend emits: :scene, :nodes, :steps.
 
 (def animation-graph
   {:scene :plato-demo
@@ -34,7 +42,6 @@
               :opts {:run-time 1.2}}]}
     {:step :hold :seconds 1.0}]})
 
-
 (def layout-graph
   {:scene :layout-demo
    :kind :layout
@@ -56,73 +63,289 @@
    :layout
    {:desargues.layout/box {:x 0 :y 0 :w 13.222222 :h 7.0}}})
 
+;; ── sources quoted on slides ────────────────────────────────────────────────
+
+(def deck-source
+  "(deck/deck
+ {:title  \"My talk\"
+  :slides [(deck/slide :intro
+                       [:h1 \"Hello\"]
+                       {:background-image \"hero.jpg\"
+                        :notes            \"Speaker-only\"})
+
+           (deck/stack :details
+                       [(deck/slide :one [:p \"First\"])
+                        (deck/slide :two [:p \"Second\"])])]})")
+
+(def markdown-source
+  "---
+title: My talk
+---
+
+# Hello
+
+Revenue, **delivery**, and the *three bets*.
+
+Note: ninety seconds of framing.
+
+## Details
+
+- First
+- Second")
+
+(def org-source
+  "#+TITLE: My talk
+
+* Hello
+
+Revenue, *delivery*, and the /three bets/.
+
+:NOTES:
+Ninety seconds of framing.
+:END:
+
+** Details
+
+- First
+- Second")
+
+(def front-end-source
+  "(ns talk.latex
+  (:require [plato.source :as source]))
+
+(defn ->deck [text]
+  ...)
+
+(source/register-extensions! :latex [\"tex\"])
+
+(defmethod source/->deck :latex [_ text]
+  (->deck text))")
+
+(def content-source
+  "(defmethod content/render :timeline [{:keys [events]}]
+  (into [:ol.acme-timeline]
+        (map (fn [e] [:li (:label e)]))
+        events))
+
+(defn timeline [events]
+  {:plato/type :timeline :events events})")
+
+(def cli-source
+  "# any registered format, one command
+plato build talk.md  -o dist/talk.html --assets public
+plato build talk.org -o dist/talk.html
+plato build deck.edn -o dist/talk.html
+
+# tokens in, stylesheet out
+plato theme theme/acme.tokens.edn -o css/acme.css")
+
+(def tokens-source
+  "{:meta  {:prefix \"plato\" :reveal-theme \"night\"}
+ :color {:bg \"#0b0e13\" :accent \"#f0ac5f\"}
+ :scene {:palette [:teal :gold] :background :bg}
+
+ :rules
+ [[:.reveal {:background [:token :bg]}
+   [:.plato-kicker {:color [:token :accent]}]]]}")
+
+;; ── the deck ────────────────────────────────────────────────────────────────
+
 (def model
   (deck/deck
-   {:title "Plato"
+   {:title "Plato — a deck is a value"
     :config {:hash true
              :history true
              :controls true
              :progress true
              :center true
+             :slide-number "c/t"
              :transition :slide}
     :slides
     [(deck/slide
       :welcome
       [:div
-       [:div.plato-kicker "ClojureScript presentation engine"]
+       (content/kicker "ClojureScript presentation engine")
        [:h1 "Plato"]
-       [:p "Reveal.js navigation. Immutable deck data. Live Desargues animation."]
+       [:p "A deck is an ordinary Clojure value, so the same source renders as a "
+        "live presentation, as a standalone HTML file, and as an assertion in a "
+        "test suite."]
        [:p.fragment "Slides become programs without becoming a JavaScript project."]]
       {:background-color "#0b0e13"
-       :notes "Open speaker view with S. Overview with O."})
+       :notes (content/bullets
+               ["Arrow keys or space to advance."
+                "O for overview, S for speaker notes, F for fullscreen, ? for shortcuts."
+                "Every slide here is built by the engine it describes."])})
 
      (deck/slide
-      :capabilities
+      :a-deck-is-a-value
       [:div
-       [:div.plato-kicker "One composition model"]
-       [:h2 "Better primitives above Reveal"]
-       [:div.plato-grid
-        [:div.plato-card.fragment
-         [:h3 "Data"]
-         [:p "Decks, stacks, slides, fragments and notes are Clojure values."]]
-        [:div.plato-card.fragment
-         [:h3 "Animation"]
-         [:p "Desargues RecordingBackend graphs compile into scrub-able SVG timelines."]]
-        [:div.plato-card.fragment
-         [:h3 "Extension"]
-         [:p "Protocols and multimethods keep render targets and node kinds open."]]]])
+       (content/kicker "The model")
+       [:h2 "A deck is a value"]
+       (content/code :clojure deck-source
+                     {:highlight "1|2|3-7|9-11|all"})
+       [:p.fragment "Nothing is registered, mounted or configured. "
+        [:code "deck/deck"] " validates the tree and throws rather than "
+        "rendering something wrong."]]
+      {:notes "Step the highlight: the map, the title, a slide with options, a vertical stack."})
+
+     (deck/slide
+      :content-is-open
+      [:div
+       (content/kicker "The content model")
+       [:h2 "Sixteen kinds, one multimethod"]
+       (content/cards
+        [{:title "Media" :body "Images, GIFs, video with poster and sources, audio, iframes."}
+         {:title "Prose" :body "Bullets, ordered lists, tables, quotations, callouts, kickers."}
+         {:title "Code" :body "Language-tagged blocks with stepped line highlighting."}
+         {:title "Layout" :body "Columns, card grids, groups and Reveal fragments."}]
+        {:columns 2 :fragments? true})]
+      {:notes "These are the shipped kinds, not the limit — the next slide adds one."})
+
+     (deck/slide
+      :adding-a-kind
+      [:div
+       (content/kicker "Open/closed")
+       [:h2 "Adding a content kind"]
+       (content/code :clojure content-source {:highlight "1-4|6-7"})
+       (content/note
+        [:span "One " [:code "defmethod"] ". No edit to the deck model, the "
+         "browser shell, or the HTML exporter."]
+        {:tone :ok :title "That is the whole extension point"})])
+
+     (deck/slide
+      :front-ends
+      [:div
+       (content/kicker "Authoring")
+       [:h2 "Write it however you think"]
+       (content/columns
+        [(content/group [(content/kicker "Markdown")
+                         (content/code :markdown markdown-source)])
+         (content/group [(content/kicker "Org")
+                         (content/code :org org-source)])])
+       [:p.fragment "Both compile to the same deck value — the test suite asserts "
+        "the two produce identical slide ids and byte-identical HTML."]]
+      {:notes "docs/acme.md and docs/acme.org are the same deck written twice, and CI proves it."})
+
+     (deck/slide
+      :conversion-is-open
+      [:div
+       (content/kicker "The same lever, again")
+       [:h2 "So is the set of formats"]
+       (content/code :clojure front-end-source {:highlight "1-2|7|9-10"})
+       [:p.fragment "Markdown, Org and EDN ship this way. "
+        [:code "plato.cli"] " does not know their names."]]
+      {:notes "A front end outside plato joins the CLI by existing — no case, no registry edit."})
 
      (deck/slide
       :animation
       (desargues/scene animation-graph {:controls? true :autoplay? true})
       {:transition :fade
-       :notes "This graph has the same :scene/:nodes/:steps shape emitted by Desargues."})
+       :notes (content/group
+               [[:p "This is a Desargues RecordingBackend graph — the same "
+                 [:code ":scene/:nodes/:steps"] " data the animation engine emits."]
+                [:p "Scrub it. In a static export the identical scene renders as its final frame."]])})
 
      (deck/slide
       :layout
       (desargues/scene layout-graph {:controls? true :autoplay? true})
       {:transition :fade
-       :notes "Generated by Desargues render-layout! through RecordingBackend."})
+       :notes "Emitted by desargues.scene/render-layout! — the declarative half of the contract."})
+
+     (deck/slide
+      :two-targets
+      [:div
+       (content/kicker "Render targets")
+       [:h2 "Reagent here, a string on the JVM"]
+       (content/table
+        ["" "Browser" "Static export"]
+        [["Runtime" "Reagent + Reveal.js" "JVM or a native binary"]
+         ["Scenes" "Live, scrub-able SVG" "Final frame, same SVG code"]
+         ["Slide attributes" "plato.deck/section-attrs" "plato.deck/section-attrs"]
+         ["Output" "A running page" "One self-contained .html"]]
+        {:caption "One definition of a slide's attributes serves both"})]
+      {:notes "The shared row is the point: neither target owns the slide model."})
+
+     (deck/slide
+      :reproducible
+      [:div
+       (content/kicker "Determinism")
+       [:h2 "The same deck, the same bytes"]
+       (content/bullets
+        ["Attribute order is decided by the serializer, not by a map's iteration order."
+         "Accents fold through plato's own NFD table, not the host's normalizer."
+         "So a page built by the JVM and one built by the native binary are byte-identical — asset trees included."]
+        {:fragments? true})
+       (content/note
+        "No Clojure map preserves insertion order past a handful of entries, and which
+         order it falls back to is a property of the host. A build tool cannot inherit that."
+        {:tone :warn :title "Why it needs saying"})])
 
      (deck/stack
-      :deep-dive
+      :theming
       [(deck/slide
-        :markdown
-        "# Markdown is native\n\n- Reveal plugins remain available\n- Code highlighting, math, notes and search\n- Horizontal and vertical navigation")
-       (deck/slide
-        :math
+        :tokens
         [:div
-         [:div.plato-kicker "Reveal math plugin"]
-         [:h2 "\\[ e^{i\\pi} + 1 = 0 \\]"]
-         [:p.fragment "Clojure data can contain ordinary HTML, components, or Desargues scenes."]])])
+         (content/kicker "Theming")
+         [:h2 "One source, N projections"]
+         (content/code :clojure tokens-source {:highlight "1-3|4|6-9"})])
+       (deck/slide
+        :projections
+        [:div
+         (content/kicker "Generated, and checked for drift")
+         [:h2 "What one token file becomes"]
+         (content/cards
+          [{:title "CSS" :body "A :root custom property per token, then the theme's own rules."}
+           {:title "Clojure" :body "The tokens as data — the scene palette is derived from it."}
+           {:title "JSON" :body "A language-neutral manifest, value and variable per token."}]
+          {:columns 3})
+         [:p.fragment "A theme may " [:code ":extends"] " another and state only what "
+          "differs. Scene colours and CSS colours cannot drift, because they are the same token."]])])
+
+     (deck/slide
+      :cli
+      [:div
+       (content/kicker "The CLI")
+       [:h2 "Notes in, presentation out"]
+       (content/code :bash cli-source {:highlight "1-4|6-7"})
+       [:p.fragment "On the JVM, or as a self-contained native binary built with "
+        [:a {:href "https://github.com/clojurewasm"} "ClojureWasm"] " — no JVM at run time."]])
+
+     (deck/slide
+      :markdown-native
+      "# Native Markdown slides\n\nA slide whose content is a string becomes a `data-markdown` section, so Reveal's own plugin parses it in the browser.\n\n- Highlighting, math, search and notes keep working\n- The engine adds a model; it does not replace Reveal"
+      {:notes "This slide is a plain string in the deck value."})
+
+     (deck/slide
+      :tested
+      [:div
+       (content/kicker "Evidence")
+       [:h2 "Two suites, because one cannot see enough"]
+       (content/columns
+        [(content/group
+          [(content/kicker "JVM")
+           (content/bullets ["201 tests, 1748 assertions"
+                             "Parsers, deck model, HTML, theming, CLI"
+                             "Front-end convergence"])])
+         (content/group
+          [(content/kicker "Browser")
+           (content/bullets ["Playwright over this very page"
+                             "Did Reveal accept the config?"
+                             "Did a scene start when it scrolled into view?"])])])
+       [:p.fragment "The JVM suite cannot answer the right-hand column. Those are "
+        "properties of a running page, so they are measured in one."]])
 
      (deck/slide
       :finish
       [:div
-       [:div.plato-kicker "Plato"]
+       (content/kicker "Plato")
        [:h2 "Author once. Present anywhere."]
-       [:p "Press F for fullscreen, O for overview, S for speaker notes, and ? for shortcuts."]]
-      {:background-color "#111827"})]}))
+       (content/quotation
+        "A deck is an ordinary Clojure value."
+        {:cite "the whole idea"})
+       [:p [:a {:href "https://github.com/BuddhiLW/plato"} "github.com/BuddhiLW/plato"]
+        " · " [:a {:href "acme.html"} "the Acme demo"]]]
+      {:background-color "#111827"
+       :notes "Acme exercises every content kind on 25 slides."})]}))
 
 (defn- root [] (js/document.getElementById "app"))
 

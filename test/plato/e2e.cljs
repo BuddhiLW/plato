@@ -56,9 +56,40 @@
    {:url "/index.html#/animation"
     :settle 1500
     :probes
-    [{:name "the example deck's scene autoplayed too"
+    [{:name "the site deck's scene autoplayed too"
       :js "(document.querySelector('section#animation output')||{}).textContent||''"
-      :ok? #(pos? (elapsed %))}]}])
+      :ok? #(pos? (elapsed %))}]}
+
+   ;; The published site is a fixture, not just a page: these are the slides a
+   ;; visitor is most likely to land on, so a content kind that stops rendering
+   ;; fails the build rather than the demo.
+   {:url "/index.html#/content-is-open"
+    :settle 1200
+    :probes
+    [{:name "the card grid rendered every card"
+      :js "document.querySelectorAll('section#content-is-open .plato-card').length"
+      :ok? #(>= % 4)}]}
+
+   {:url "/index.html#/a-deck-is-a-value"
+    :settle 1200
+    :probes
+    [{:name "the code block is language-tagged for the highlighter"
+      :js (str "!!document.querySelector('section#a-deck-is-a-value "
+               "code.language-clojure')")
+      :ok? true?}
+     {:name "stepped highlighting reached the DOM as data-line-numbers"
+      :js (str "(document.querySelector('section#a-deck-is-a-value code')||{})"
+               ".getAttribute?document.querySelector('section#a-deck-is-a-value code')"
+               ".getAttribute('data-line-numbers'):null")
+      :ok? #(boolean (seq (str %)))}]}
+
+   {:url "/index.html#/tested"
+    :settle 1200
+    :probes
+    [{:name "columns and their nested bullets both rendered"
+      :js (str "(function(){var s=document.querySelector('section#tested');"
+               "return !!s && s.querySelectorAll('.plato-list li').length;})()")
+      :ok? #(>= % 6)}]}])
 
 ;; ── static server ───────────────────────────────────────────────────────────
 
