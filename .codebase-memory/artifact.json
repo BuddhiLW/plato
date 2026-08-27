@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "a17846e3c6608800d295bdff609566deb102901b",
-    "indexed_at": "2026-08-21T22:18:13Z",
-    "project": "plato",
-    "nodes": 255,
-    "edges": 405,
-    "original_size": 2228224,
-    "compressed_size": 167086,
+    "commit": "782e830d6b69c825ae3d38aa3b446ed038988c5c",
+    "indexed_at": "2026-08-27T19:54:48Z",
+    "project": "plato-82065ca4",
+    "nodes": 698,
+    "edges": 1239,
+    "original_size": 2162688,
+    "compressed_size": 115837,
     "compression_level": 3
 }
