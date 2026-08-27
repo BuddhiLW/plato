@@ -32,6 +32,18 @@
    :transition-speed
    :visibility])
 
+(def overflow-waiver
+  "The slide option that declares an overflow deliberate, and the attribute it
+   projects to.
+
+   One definition with two readers: `deck` validates a slide's :overflow against
+   :values, and plato.fit reads :attr back off the rendered DOM. A value that
+   fails validation can never reach the DOM to be misread there as 'not waived',
+   and the checker needs no reference to the deck that built the page."
+  {:option :overflow
+   :attr :data-plato-overflow
+   :values #{:allow}})
+
 (defn attr-value
   "Slide-option value -> DOM attribute value. `true` becomes the empty string."
   [value]
@@ -41,8 +53,8 @@
     :else value))
 
 (defn section-attrs
-  "Attribute map for a slide's <section>: its id plus every Reveal data key set
-   on the slide."
+  "Attribute map for a slide's <section>: its id, any declared overflow waiver,
+   and every Reveal data key set on the slide."
   [slide]
   (reduce (fn [attrs key]
             (if (contains? slide key)
@@ -52,7 +64,9 @@
               attrs))
           (cond-> {}
             (:id slide) (assoc :id (name (:id slide)))
-            (:class slide) (assoc :class (:class slide)))
+            (:class slide) (assoc :class (:class slide))
+            (:overflow slide) (assoc (:attr overflow-waiver)
+                                     (name (:overflow slide))))
           reveal-data-keys))
 
 (def default-config
@@ -105,6 +119,18 @@
                 (every? valid-entry? (:slides entry)))
     false))
 
+(defn- invalid-overflow
+  "Slides whose :overflow is not a value the waiver defines, as [id value]."
+  [entries]
+  (vec (mapcat (fn [entry]
+                 (if (= :stack (:plato/type entry))
+                   (invalid-overflow (:slides entry))
+                   (let [declared (:overflow entry)]
+                     (when (and declared
+                                (not (contains? (:values overflow-waiver) declared)))
+                       [[(:id entry) declared]]))))
+               entries)))
+
 (defn entry-ids
   "Every id a deck puts in the DOM, stacks included, in document order."
   [entries]
@@ -120,11 +146,17 @@
                      :plato/type :deck
                      :slides slides
                      :config (merge default-config config))
-        duplicates (duplicate-ids (entry-ids slides))]
+        duplicates (duplicate-ids (entry-ids slides))
+        bad-overflow (invalid-overflow slides)]
     (when-not (seq slides)
       (throw (ex-info "Deck requires at least one slide" {:spec spec})))
     (when-not (every? valid-entry? slides)
       (throw (ex-info "Invalid slide entry" {:slides slides})))
     (when (seq duplicates)
       (throw (ex-info "Duplicate slide ids" {:ids duplicates})))
+    (when (seq bad-overflow)
+      (throw (ex-info (str ":overflow accepts " (pr-str (:values overflow-waiver))
+                           " — a slide cannot waive a fit check with a value the"
+                           " checker will not recognise")
+                      {:slides bad-overflow})))
     model))

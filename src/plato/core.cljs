@@ -4,6 +4,10 @@
             [plato.content :as content]
             [plato.deck :as deck]
             [plato.reveal :as reveal]
+            ;; Load-only: plato.fit answers "does this slide fit" from inside
+            ;; the running page, so it has to be in the bundle the page loads
+            ;; rather than in a test harness beside it.
+            [plato.fit]
             [plato.scene-view]))
 
 (defonce ^:private roots (js/WeakMap.))
