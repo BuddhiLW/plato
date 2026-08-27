@@ -28,3 +28,25 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  # The JVM suite cannot see whether Reveal accepted the config, whether the
+  # markdown plugin left React's <section> alone, or whether a scene starts
+  # playing when it scrolls into view. Those are properties of a running page.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: DeLaGuardo/setup-clojure@13.2
+        with:
+          cli: latest
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
