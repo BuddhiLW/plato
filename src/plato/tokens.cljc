@@ -171,16 +171,27 @@
                    (map (fn [[k v]] (str (pr-str k) " " (pr-str v))) m))
          "}")))
 
+(defn- emit-rules [rules indent]
+  (let [pad (apply str (repeat indent " "))]
+    (str "[" (str/join (str "\n" pad) (map pr-str rules)) "]")))
+
 (defn cljc
-  "Token map -> the source of a generated namespace holding it as data."
+  "Token map -> the source of a generated namespace holding it as data.
+
+   Carries `:rules` when the theme declares any, so the namespace is the whole
+   token map and not the part of it that happens to be leaf values."
   ([tokens] (cljc tokens 'plato.theme "theme/plato.tokens.edn"))
   ([tokens ns-sym source]
-   (str "(ns " ns-sym "\n"
-        "  \"GENERATED from " source ". Do not edit; run `plato theme " source "`.\")\n\n"
-        "(def tokens\n"
-        "  \"Theme tokens as data: :meta, :color, :scale, :type, :scene.\"\n"
-        "  {:meta " (emit-map (:meta tokens) 10) "\n"
-        "   :color " (emit-map (:color tokens) 11) "\n"
-        "   :scale " (emit-map (:scale tokens) 11) "\n"
-        "   :type " (emit-map (:type tokens) 10) "\n"
-        "   :scene " (emit-map (:scene tokens) 11) "})\n")))
+   (let [rules (:rules tokens)]
+     (str "(ns " ns-sym "\n"
+          "  \"GENERATED from " source ". Do not edit; run `plato theme " source "`.\")\n\n"
+          "(def tokens\n"
+          "  \"Theme tokens as data: :meta, :color, :scale, :type, :scene"
+          (when (seq rules) ", :rules") ".\"\n"
+          "  {:meta " (emit-map (:meta tokens) 10) "\n"
+          "   :color " (emit-map (:color tokens) 11) "\n"
+          "   :scale " (emit-map (:scale tokens) 11) "\n"
+          "   :type " (emit-map (:type tokens) 10) "\n"
+          "   :scene " (emit-map (:scene tokens) 11)
+          (when (seq rules) (str "\n   :rules " (emit-rules rules 11)))
+          "})\n"))))

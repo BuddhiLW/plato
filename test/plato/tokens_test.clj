@@ -117,6 +117,20 @@
            (slurp "public/css/acme-print-theme.css"))
         "public/css/acme-print-theme.css is stale — regenerate the theme")))
 
+(deftest the-generated-namespace-is-the-whole-token-map
+  (let [source (composed "theme/acme-print.tokens.edn")
+        generated (tokens/cljc source 'acme.print "theme/acme-print.tokens.edn")
+        read-back (->> generated
+                       (re-find #"(?s)\(def tokens\s+\"[^\"]*\"\s+(\{.*\})\)")
+                       second
+                       edn/read-string)]
+    (testing "a theme's rules survive the projection to Clojure data"
+      (is (seq (:rules source)) "fixture must declare rules")
+      (is (= (:rules source) (:rules read-back))))
+    (testing "and so does everything else"
+      (is (= (select-keys source [:meta :color :scale :type :scene])
+             (select-keys read-back [:meta :color :scale :type :scene]))))))
+
 (deftest color-palette-comes-from-the-theme
   (is (= (tokens/palette theme/tokens) color/palette))
   (is (= "#5CD0B3" (color/hex :teal)))
