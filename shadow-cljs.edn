@@ -1,7 +1,13 @@
 {:source-paths ["src" "examples" "test"]
  :dependencies [[reagent "2.0.1"]]
+ ;; Pinned rather than left to shadow's defaults: 8080 and 9630 are common
+ ;; enough to be taken by something else on a dev machine, and shadow reports a
+ ;; failed bind as a log warning and carries on — the dev server is then simply
+ ;; absent while another service answers on the port, which reads as a green
+ ;; page load serving someone else's app.
  :nrepl {:port 7899}
- :dev-http {8080 "public"}
+ :http {:port 9637}
+ :dev-http {8086 "public"}
  :builds
  {:e2e  {:target :node-script
          :output-to "target/e2e.js"

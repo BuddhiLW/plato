@@ -198,6 +198,14 @@
      []
      (mapv verdict (measure-deck))))
 
+#?(:cljs
+   (defn verdict-for
+     "The verdict for one slide by id — what the checker says about it and why.
+      The question an author asks when a slide is flagged, and the one the
+      authoring overlay asks per slide."
+     [id]
+     (first (filter #(= id (:id %)) (report)))))
+
 ;; Two callers, one judgment. The node e2e harness wants a value it can put a
 ;; predicate on; hive-cljs `:eval-cljs` wants a throw. ^:export keeps the name
 ;; through :advanced so a probe can call it from outside the compiled bundle.

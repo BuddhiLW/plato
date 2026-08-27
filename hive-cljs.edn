@@ -1,22 +1,27 @@
 ;; hive-cljs manifest for plato.
 ;;
-;; Targets the shadow-cljs dev server on :dev-http 8080, serving `public/` —
+;; Targets the shadow-cljs dev server on :dev-http 8086, serving `public/` —
 ;; the same tree the Pages workflow deploys, so a scenario drives the artifact
 ;; that ships rather than a test double.
+;;
+;; The ports match shadow-cljs.edn and are pinned there for a reason: 8080 was
+;; already taken on the machine this was written on, shadow logged the failed
+;; bind and kept going, and an unrelated service answered 200 on it. Every
+;; scenario then loaded a page that was not plato at all.
 ;;
 ;; :nrepl-port is what makes the fit scenarios possible: overflow is a property
 ;; of laid-out pixels, so the assertion has to run inside the page. The steps
 ;; call plato.fit in the browser runtime — one definition of "fits", shared by
 ;; the scenarios here and the authoring overlay.
 {:hive.cljs/shadow {:host       "localhost"
-                    :port       9630
+                    :port       9637
                     :nrepl-port 7899}
 
  :hive.cljs/builds {:app  {:shadow/id :app
-                           :http-port 8080
+                           :http-port 8086
                            :entry     "/index.html"}
                     :acme {:shadow/id :acme
-                           :http-port 8080
+                           :http-port 8086
                            :entry     "/acme.html"}}
 
  :hive.cljs/e2e
@@ -49,6 +54,29 @@
             [:eval-cljs "(plato.fit/assert-deck-fits!)"]]}
 
    ;; ── waivers stay honest ────────────────────────────────────────────────
+   ;; The seam the JVM tests cannot reach: the waiver is declared in deck data,
+   ;; projected to an attribute, and read back off the DOM. Both halves are
+   ;; unit-tested; that they meet is only observable in a browser.
+   {:id    :fit-waiver-round-trip
+    :build :app
+    :tags  [:fit]
+    :doc   "Setting data-plato-overflow on a slide that fits makes it a stale
+            waiver, and clearing it makes it ok again — so the checker really
+            is reading the author's intent off the page."
+    :steps [[:goto "/index.html"]
+            [:wait-for ".reveal .slides section"]
+            [:wait-ms 1200]
+            [:eval-cljs "(when-not (= :ok (:state (plato.fit/verdict-for \"welcome\")))
+                           (throw (ex-info \"fixture slide does not fit to begin with\" {})))"]
+            [:eval-cljs "(do (.setAttribute (.querySelector js/document \"section#welcome\")
+                                            \"data-plato-overflow\" \"allow\") :set)"]
+            [:eval-cljs "(when-not (= :stale-waiver (:state (plato.fit/verdict-for \"welcome\")))
+                           (throw (ex-info \"the waiver attribute was not read off the DOM\" {})))"]
+            [:eval-cljs "(do (.removeAttribute (.querySelector js/document \"section#welcome\")
+                                               \"data-plato-overflow\") :cleared)"]
+            [:eval-cljs "(when-not (= :ok (:state (plato.fit/verdict-for \"welcome\")))
+                           (throw (ex-info \"clearing the waiver did not restore :ok\" {})))"]]}
+
    {:id    :fit-no-stale-waivers
     :build :app
     :tags  [:fit]

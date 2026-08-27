@@ -29,8 +29,8 @@ npm install
 npm run dev
 ~~~
 
-- <http://localhost:8080/> — plato explaining itself: the deck model, the open content and front-end registries, theming, and two live Desargues scenes. This is what ships to [buddhilw.github.io/plato](https://buddhilw.github.io/plato/), and the browser suite drives it, so a slide that stops rendering fails CI.
-- <http://localhost:8080/acme.html> — **Acme Corp — Q3 Product Review**, a 25-slide demo that exercises every content kind: background image and background video, an animated GIF, an inline video with poster and multiple sources, audio, an interactive iframe, stepped code highlighting, a native Reveal markdown slide, math, a metrics table, a card grid, a pull quote, a callout, an auto-animate pair, a vertical stack, and a live Desargues scene.
+- <http://localhost:8086/> — plato explaining itself: the deck model, the open content and front-end registries, theming, and two live Desargues scenes. This is what ships to [buddhilw.github.io/plato](https://buddhilw.github.io/plato/), and the browser suite drives it, so a slide that stops rendering fails CI.
+- <http://localhost:8086/acme.html> — **Acme Corp — Q3 Product Review**, a 25-slide demo that exercises every content kind: background image and background video, an animated GIF, an inline video with poster and multiple sources, audio, an interactive iframe, stepped code highlighting, a native Reveal markdown slide, math, a metrics table, a card grid, a pull quote, a callout, an auto-animate pair, a vertical stack, and a live Desargues scene.
 
 Production build (both decks): `npm run build`. Full check: `npm run check`.
 
