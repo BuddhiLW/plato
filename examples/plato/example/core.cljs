@@ -77,6 +77,9 @@
                        [(deck/slide :one [:p \"First\"])
                         (deck/slide :two [:p \"Second\"])])]})")
 
+;; Kept short on purpose: these sit side by side in two columns on the
+;; :front-ends slide, so a line long enough to wrap there is a line the
+;; audience reads clipped. The fit gate fails the build when they grow.
 (def markdown-source
   "---
 title: My talk
@@ -84,30 +87,20 @@ title: My talk
 
 # Hello
 
-Revenue, **delivery**, and the *three bets*.
+Revenue and the *three bets*.
 
-Note: ninety seconds of framing.
-
-## Details
-
-- First
-- Second")
+Note: ninety seconds.")
 
 (def org-source
   "#+TITLE: My talk
 
 * Hello
 
-Revenue, *delivery*, and the /three bets/.
+Revenue and the /three bets/.
 
 :NOTES:
-Ninety seconds of framing.
-:END:
-
-** Details
-
-- First
-- Second")
+Ninety seconds.
+:END:")
 
 (def front-end-source
   "(ns talk.latex
@@ -221,10 +214,8 @@ plato theme theme/acme.tokens.edn -o css/acme.css")
         [(content/group [(content/kicker "Markdown")
                          (content/code :markdown markdown-source)])
          (content/group [(content/kicker "Org")
-                         (content/code :org org-source)])])
-       [:p.fragment "Both compile to the same deck value — the test suite asserts "
-        "the two produce identical slide ids and byte-identical HTML."]]
-      {:notes "docs/acme.md and docs/acme.org are the same deck written twice, and CI proves it."})
+                         (content/code :org org-source)])])]
+      {:notes "Both compile to the same deck value. docs/acme.md and docs/acme.org are the same deck written twice, and CI proves the slide ids and the HTML match."})
 
      (deck/slide
       :conversion-is-open
@@ -271,14 +262,13 @@ plato theme theme/acme.tokens.edn -o css/acme.css")
        (content/kicker "Determinism")
        [:h2 "The same deck, the same bytes"]
        (content/bullets
-        ["Attribute order is decided by the serializer, not by a map's iteration order."
-         "Accents fold through plato's own NFD table, not the host's normalizer."
-         "So a page built by the JVM and one built by the native binary are byte-identical — asset trees included."]
-        {:fragments? true})
-       (content/note
-        "No Clojure map preserves insertion order past a handful of entries, and which
-         order it falls back to is a property of the host. A build tool cannot inherit that."
-        {:tone :warn :title "Why it needs saying"})])
+        ["Attribute order is the serializer's, not a map's iteration order."
+         "Accents fold through plato's own NFD table, not the host's."
+         "So the JVM and the native binary emit byte-identical pages."]
+        {:fragments? true})]
+      {:notes "No Clojure map keeps insertion order past a handful of entries, and the
+               order it falls back to is a property of the host. A build tool cannot
+               inherit that and still call itself reproducible."})
 
      (deck/stack
       :theming
@@ -312,27 +302,31 @@ plato theme theme/acme.tokens.edn -o css/acme.css")
 
      (deck/slide
       :markdown-native
-      "# Native Markdown slides\n\nA slide whose content is a string becomes a `data-markdown` section, so Reveal's own plugin parses it in the browser.\n\n- Highlighting, math, search and notes keep working\n- The engine adds a model; it does not replace Reveal"
+      "## Native Markdown slides\n\nA slide whose content is a string becomes a `data-markdown` section, parsed by Reveal's own plugin in the browser.\n\n- Highlighting, math, search and notes keep working\n- The engine adds a model; it does not replace Reveal"
       {:notes "This slide is a plain string in the deck value."})
 
      (deck/slide
       :tested
       [:div
        (content/kicker "Evidence")
-       [:h2 "Two suites, because one cannot see enough"]
+       [:h2 "Three suites"]
        (content/columns
         [(content/group
           [(content/kicker "JVM")
-           (content/bullets ["201 tests, 1748 assertions"
-                             "Parsers, deck model, HTML, theming, CLI"
-                             "Front-end convergence"])])
+           (content/bullets ["Parsers, deck model, HTML"
+                             "Theming, CLI, convergence"])])
          (content/group
           [(content/kicker "Browser")
-           (content/bullets ["Playwright over this very page"
-                             "Did Reveal accept the config?"
-                             "Did a scene start when it scrolled into view?"])])])
-       [:p.fragment "The JVM suite cannot answer the right-hand column. Those are "
-        "properties of a running page, so they are measured in one."]])
+           (content/bullets ["Playwright over this page"
+                             "Did Reveal take the config?"])])
+         (content/group
+          [(content/kicker "Fit")
+           (content/bullets ["Every slide measured in its box"
+                             "An overflow fails the build"])])])]
+      {:notes (content/group
+               [[:p "The JVM suite cannot see layout at all — it asserts the blueprint."]
+                [:p "This slide is checked by the fit gate, in a browser, at the size "
+                 "you are reading it now."]])})
 
      (deck/slide
       :finish
