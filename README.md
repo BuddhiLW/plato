@@ -235,18 +235,30 @@ home. From the REPL the same thing is a function call:
 | Text primitives | `plato.text`, `plato.nfd` | CLJ/CLJS/cljw |
 | Theming | `plato.tokens`, `plato.css`, `plato.theme`, `plato.json` | CLJ/CLJS/cljw |
 | Static export + CLI | `plato.html`, `plato.cli` | CLJ/cljw |
+| Fit | `plato.fit` | CLJ/CLJS — judging is pure, measuring needs a laid-out page |
 | Browser shell | `plato.core`, `plato.reveal`, `plato.scene-view`, `plato.player` | CLJS |
 
-See [docs/architecture.md](docs/architecture.md).
+Slide authoring, theming and the fit gate are covered in [docs/authoring.md](docs/authoring.md).
 
 ## Desargues compatibility
 
-Plato depends on Desargues’ data contract, not its Manim implementation, and accepts both RecordingBackend outputs:
+Plato depends on Desargues’ data contract, not its Manim implementation:
 
-- imperative scenes from <code>desargues.scene/render!</code>
-- declarative layout scenes from <code>desargues.scene/render-layout!</code>
+~~~clojure
+{:scene keyword-or-string
+ :nodes {id {:id id :node keyword ...}}
+ :steps [{:step :play :anims [...]}
+         {:step :hold :seconds number}]}
+~~~
 
-Add a scene node kind with a `plato.render/node->hiccup` method; add an animation with a `plato.tween/build-span` method and its channel entry.
+Both RecordingBackend outputs are accepted:
+
+- imperative scenes from <code>desargues.scene/render!</code> — nodes carry `:at` and `:opts`
+- declarative layout scenes from <code>desargues.scene/render-layout!</code> — nodes carry `:box`, `:style` and `:content`
+
+Scene-level layout reveals carry `:target :scene` and `:ids`; timeline compilation expands them to one span per node.
+
+Add a scene node kind with a `plato.render/node->hiccup` method; add an animation with a `plato.tween/build-span` method and its channel entry. Alternate visual targets implement `IRenderTarget`; alternate clocks implement `IPlayer`.
 
 ## License
 
