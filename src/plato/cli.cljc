@@ -57,6 +57,7 @@
     "  -o, --out <path>        output CSS (default: the source with a .css suffix)"
     "      --json <path>       also write the language-neutral manifest"
     "      --cljc <path>       also write the tokens as a Clojure namespace"
+    "      --sty <path>        also write a Beamer style file, for autopdf deck"
     "      --ns <symbol>       namespace for --cljc (default: plato.theme)"
     "      --print             write the CSS to stdout instead of a file"]))
 
@@ -74,6 +75,7 @@
    "--fit" [:fit? 0]
    "--json" [:json 1]
    "--cljc" [:cljc 1]
+   "--sty" [:sty 1]
    "--ns" [:ns 1]
    "--print" [:print? 0]})
 
@@ -222,7 +224,11 @@
                 (not (:print? opts)) (conj {:path out :content css})
                 (:json opts) (conj {:path (:json opts) :content (tokens/json tk)})
                 (:cljc opts) (conj {:path (:cljc opts)
-                                    :content (tokens/cljc tk ns-sym input)}))]
+                                    :content (tokens/cljc tk ns-sym input)})
+                (:sty opts) (conj {:path (:sty opts)
+                                   :content (tokens/sty tk
+                                                        (strip-extension (file-name (:sty opts)))
+                                                        input)}))]
     {:files files
      :stdout (when (:print? opts) css)
      :summary (str/join "\n"

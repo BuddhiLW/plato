@@ -115,7 +115,45 @@
     (is (= (tokens/css (composed "theme/acme-print.tokens.edn")
                        "theme/acme-print.tokens.edn")
            (slurp "public/css/acme-print-theme.css"))
-        "public/css/acme-print-theme.css is stale — regenerate the theme")))
+        "public/css/acme-print-theme.css is stale — regenerate the theme")
+    (is (= (tokens/sty source "plato-beamer" default-source)
+           (slurp "theme/plato-beamer.sty"))
+        "theme/plato-beamer.sty is stale — regenerate the theme")
+    (is (= (tokens/sty (read-tokens "theme/acme.tokens.edn") "acme-beamer" "theme/acme.tokens.edn")
+           (slurp "theme/acme-beamer.sty"))
+        "theme/acme-beamer.sty is stale — regenerate the theme")))
+
+(deftest hex-colors-only-reach-latex
+  (is (= "F59E0B" (tokens/hex-color "#f59e0b")))
+  (is (= "AABBCC" (tokens/hex-color "#abc")) "a 3-digit hex expands")
+  (is (nil? (tokens/hex-color "rgba(255, 255, 255, 0.028)"))
+      "\\definecolor takes hex; an rgba() value has no LaTeX spelling")
+  (is (nil? (tokens/hex-color "rebeccapurple"))
+      "an unknown xcolor name is a compile error, so a named colour is dropped"))
+
+(deftest the-style-file-and-the-stylesheet-carry-the-same-colors
+  (testing "one token source, two projections: a colour cannot differ between them"
+    (let [source (read-tokens "theme/acme.tokens.edn")
+          sty (tokens/sty source "acme-beamer" "theme/acme.tokens.edn")
+          css (tokens/css source "theme/acme.tokens.edn")]
+      (doseq [[k v] (:color source)
+              :let [hex (tokens/hex-color v)]
+              :when hex]
+        (is (str/includes? sty (str "\\definecolor{plato" (name k) "}{HTML}{" hex "}"))
+            (str "the style file is missing " k))
+        (is (str/includes? css (str (tokens/var-name source k) ": " v ";"))
+            (str "the stylesheet is missing " k))))))
+
+(deftest the-style-file-is-a-loadable-package
+  (let [sty (tokens/sty (read-tokens default-source) "plato-beamer" default-source)]
+    (is (str/starts-with? sty "% ") "every banner line must be a LaTeX comment")
+    (is (every? #(or (str/blank? %) (str/starts-with? % "%") (str/starts-with? % "\\"))
+                (str/split-lines sty))
+        "a line that is neither comment nor command would typeset as stray text")
+    (is (str/includes? sty "\\ProvidesPackage{plato-beamer}")
+        "LaTeX requires the package name to match the file's base name")
+    (is (str/includes? sty "\\RequirePackage{xcolor}"))
+    (is (str/includes? sty "\\setbeamercolor{structure}{fg=platoaccent}"))))
 
 (deftest the-generated-namespace-is-the-whole-token-map
   (let [source (composed "theme/acme-print.tokens.edn")

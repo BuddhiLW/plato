@@ -21,7 +21,7 @@
     "export": "clojure -M:cli build",
     "cli:native": "bash scripts/build-cli.sh",
     "nfd": "clojure -M scripts/gen-nfd.clj",
-    "theme": "clojure -M:cli theme theme/plato.tokens.edn -o public/css/plato-theme.css --json theme/plato.tokens.json --cljc src/plato/theme.cljc"
+    "theme": "clojure -M:cli theme theme/plato.tokens.edn -o public/css/plato-theme.css --json theme/plato.tokens.json --cljc src/plato/theme.cljc --sty theme/plato-beamer.sty && clojure -M:cli theme theme/acme.tokens.edn -o public/css/acme-theme.css --sty theme/acme-beamer.sty"
   },
   "dependencies": {
     "react": "19.2.8",

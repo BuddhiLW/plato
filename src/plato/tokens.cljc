@@ -195,3 +195,67 @@
           "   :scene " (emit-map (:scene tokens) 11)
           (when (seq rules) (str "\n   :rules " (emit-rules rules 11)))
           "})\n"))))
+
+(def beamer-roles
+  "Beamer colour elements, each naming the token keys that fill it. Extend or
+   replace to change which token drives which part of a printed deck."
+  [{:element "normal text" :fg :fg :bg :bg}
+   {:element "background canvas" :bg :bg}
+   {:element "structure" :fg :accent}
+   {:element "title" :fg :fg}
+   {:element "frametitle" :fg :fg :bg :panel}
+   {:element "block title" :fg :bg :bg :accent}
+   {:element "block body" :fg :fg :bg :panel}
+   {:element "alerted text" :fg :warn}
+   {:element "example text" :fg :ok}
+   {:element "footline" :fg :muted}
+   {:element "itemize item" :fg :accent}
+   {:element "itemize subitem" :fg :muted}
+   {:element "enumerate item" :fg :accent}])
+
+(defn hex-color
+  "6-digit uppercase hex for a CSS colour value, or nil when it is not one.
+   \\definecolor takes hex; rgba() and named colours have no LaTeX spelling."
+  [value]
+  (when (string? value)
+    (let [body (str/replace (str/trim value) #"^#" "")]
+      (cond
+        (re-matches #"[0-9a-fA-F]{6}" body) (str/upper-case body)
+        (re-matches #"[0-9a-fA-F]{3}" body)
+        (str/upper-case (apply str (mapcat #(list % %) body)))))))
+
+(defn beamer-color-names
+  "Leaf colour key -> the LaTeX colour name the .sty defines for it. Only keys
+   whose value is a hex colour appear."
+  [tokens]
+  (into {}
+        (keep (fn [[k v]] (when (hex-color v) [k (str (prefix tokens) (name k))])))
+        (:color tokens)))
+
+(defn sty
+  "Token map -> a Beamer style file body: one \\definecolor per hex colour
+   token, then a \\setbeamercolor per entry in `beamer-roles` whose keys are
+   all defined. `package` is the \\ProvidesPackage name, which LaTeX requires
+   to match the file's own base name."
+  ([tokens package] (sty tokens package "theme/plato.tokens.edn"))
+  ([tokens package source]
+   (let [names (beamer-color-names tokens)
+         named (fn [k] (get names k))]
+     (str "% " (get-in tokens [:meta :name] "Plato theme")
+          " — GENERATED from " source ", do not edit.\n"
+          "% Regenerate: plato theme " source " --sty " package ".sty\n"
+          "\\ProvidesPackage{" package "}\n"
+          "\\RequirePackage{xcolor}\n\n"
+          (str/join "\n"
+                    (map (fn [[k v]] (str "\\definecolor{" (named k) "}{HTML}{" (hex-color v) "}"))
+                         (sort-by key (select-keys (:color tokens) (keys names)))))
+          "\n\n"
+          (str/join "\n"
+                    (keep (fn [{:keys [element fg bg]}]
+                            (let [parts (cond-> []
+                                          (named fg) (conj (str "fg=" (named fg)))
+                                          (named bg) (conj (str "bg=" (named bg))))]
+                              (when (seq parts)
+                                (str "\\setbeamercolor{" element "}{" (str/join "," parts) "}"))))
+                          beamer-roles))
+          "\n"))))
