@@ -188,6 +188,7 @@ which input sizes trip it depends on heap layout. Tracked in ClojureWasm.
 | `public/css/plato-theme.css` | `:root` custom properties, imported by `public/css/plato.css` |
 | `src/plato/theme.cljc` | the tokens as Clojure data, `:rules` included — `plato.color`’s palette is derived from it |
 | `theme/plato.tokens.json` | language-neutral manifest (value + CSS variable per token) |
+| `theme/plato-beamer.sty` | Beamer colour theme, so a printed deck matches the browser one |
 
 ~~~bash
 npm run theme      # regenerate the default theme's artifacts
@@ -198,6 +199,37 @@ Generated artifacts are committed, and `plato.tokens-test` fails when they drift
 A deck can carry its own theme the way a LaTeX document carries a style file: `theme/acme.tokens.edn` is the same contract with different values, generated to `public/css/acme-theme.css` and linked after `plato.css`. Swapping it restyles the deck without touching deck data.
 
 Scene colors and CSS colors come from the same tokens: a scene graph names `:teal`, `plato.color` resolves it, and `--plato-teal` carries the identical value into the stylesheet.
+
+## A Beamer PDF of the same source
+
+`plato.spec` projects the document IR to an [AutoPDF](https://github.com/BuddhiLW/AutoPDF)
+`DocumentSpec` — the sibling of `doc/document->deck`, so one parse feeds both a
+Reveal deck and a LaTeX Beamer PDF:
+
+~~~bash
+plato spec talk.org -o talk.json
+autopdf deck talk.json talk.pdf assets=./public theme=metropolis
+~~~
+
+Rebuilding as you write:
+
+~~~bash
+autopdf deck watch talk.json talk.pdf \
+  watch=talk.org command="plato spec talk.org -o talk.json"
+~~~
+
+A format joins by adding a `plato.source/->document` method beside its `->deck`
+one. It is optional: a source whose text is already a deck value has no document
+IR to give, and the multimethod says so by name rather than emitting an empty
+spec.
+
+`plato theme --sty` generates a Beamer colour theme from the same tokens, so a
+printed deck and the browser one cannot disagree about a palette.
+
+Video, audio and embeds have no PDF equivalent that works outside Adobe Reader,
+so they print as a visible placeholder rather than vanishing — as do GIFs, and
+scene snapshots until something converts the SVG. See
+[docs/autopdf.md](docs/autopdf.md).
 
 ## Static export
 
