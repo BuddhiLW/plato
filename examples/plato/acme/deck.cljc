@@ -152,9 +152,7 @@
        (content/columns
         [(content/image (:logo assets) {:alt "Acme Corp wordmark" :width 320})
          [:div
-          [:p "The mark, the type scale and the scene palette come out of one token file."]
-          [:p "Slides, the static export and the SVG scenes read the same values, so
-               rebranding a deck is a token edit rather than a redesign."]]]
+          [:p "The mark, type scale, and scene palette share one token file. Rebrand once; slides, exports, and SVG scenes follow."]]]
         {:widths ["1fr" "1.4fr"] :gap "2.5rem"})]
       {:notes "The logo is vector, so it stays crisp on the projector."})
 
