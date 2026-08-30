@@ -490,6 +490,8 @@
   ([text] (doc/document->deck (parse text)))
   ([text opts] (doc/document->deck (parse text) opts)))
 
+(defmethod source/->document :markdown [_ text] (parse text))
+
 (source/register-extensions! :markdown ["md" "markdown"])
 
 (defmethod source/->deck :markdown [_ text] (->deck text))

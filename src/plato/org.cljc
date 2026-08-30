@@ -565,6 +565,8 @@
   ([text] (doc/document->deck (parse text)))
   ([text opts] (doc/document->deck (parse text) opts)))
 
+(defmethod source/->document :org [_ text] (parse text))
+
 (source/register-extensions! :org ["org"])
 
 (defmethod source/->deck :org [_ text] (->deck text))

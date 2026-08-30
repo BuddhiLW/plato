@@ -40,3 +40,20 @@
 (defmethod ->deck :default [kind _text]
   (throw (ex-info (str "No front end reads " (pr-str kind))
                   {:kind kind :known (sort (vals @extensions))})))
+
+(defmulti ->document
+  "Source text of `kind` -> a plato.doc document.
+
+   Optional: a front end implements this only if its source parses to a
+   document IR. Throws for a kind that does not."
+  (fn [kind _text] kind))
+
+(defn document-kinds
+  "Kinds that have a document IR, as data. A subset of `known-extensions`."
+  []
+  (sort (remove #{:default} (keys (methods ->document)))))
+
+(defmethod ->document :default [kind _text]
+  (throw (ex-info (str "No document IR for " (pr-str kind)
+                       " — it reads straight to a deck.")
+                  {:kind kind :known (document-kinds)})))

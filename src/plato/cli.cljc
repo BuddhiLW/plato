@@ -18,7 +18,9 @@
             [plato.org]
             [plato.source :as source]
             [plato.tokens :as tokens]
-            #?(:clj [clojure.java.io :as io])))
+            #?(:clj [clojure.java.io :as io])
+            [plato.json :as json]
+            [plato.spec :as spec]))
 
 (def usage
   (str/join
@@ -27,6 +29,7 @@
     ""
     "  plato build <source.md|source.org> [options]"
     "  plato build --deck <ns/var> --out <path> [options]"
+    "  plato spec  <source.md|source.org> [options]"
     "  plato theme <tokens.edn> [options]"
     "  plato help | version"
     ""
@@ -43,6 +46,12 @@
     "      --fit               load plato.fit so the page can report whether its"
     "                          slides fit; implied by any {:overflow :shrink} slide"
     "      --print             write the page to stdout instead of a file"
+    ""
+    "spec options — emit an AutoPDF DocumentSpec, for a Beamer PDF of the same source"
+    "  -o, --out <path>        output JSON (default: the source with a .json suffix)"
+    "      --title <string>    document id (default: the deck title)"
+    "      --theme <name>      theme name carried to the renderer"
+    "      --print             write the JSON to stdout instead of a file"
     ""
     "theme options"
     "  -o, --out <path>        output CSS (default: the source with a .css suffix)"
@@ -70,7 +79,7 @@
 
 (def commands
   "Bare words that select what the CLI does."
-  {"build" :build "theme" :theme
+  {"build" :build "theme" :theme "spec" :spec
    "help" :help "-h" :help "--help" :help
    "version" :version "-v" :version "--version" :version})
 
@@ -221,6 +230,35 @@
                                (str "wrote " path " (" (count content) " bytes)"))
                              files))}))
 
+(defn spec-job
+  "Pure DocumentSpec projection, for AutoPDF. Takes the already-read source;
+   returns the same {:files :stdout :summary} shape as the other jobs.
+
+   job: {:input path :text source-text :opts {...}}
+
+   Throws for a source kind with no document IR — see plato.source/->document."
+  [{:keys [input text opts]}]
+  (let [kind (source/kind input)
+        _ (when (nil? kind)
+            (throw (ex-info (str "Unsupported source extension: " input)
+                            {:input input
+                             :known (sort (keys (source/known-extensions)))})))
+        document (source/->document kind text)
+        value (spec/document->spec document
+                                   (cond-> {}
+                                     (:title opts) (assoc :id (:title opts))
+                                     (:theme opts) (assoc :theme (:theme opts))))
+        out (or (:out opts) (str (strip-extension input) ".json"))
+        payload (json/write value {:key-fn json/camel-key :indent 2})
+        frames (count (:blocks value))]
+    {:files (if (:print? opts) [] [{:path out :content payload}])
+     :copies []
+     :stdout (when (:print? opts) payload)
+     :spec value
+     :summary (if (:print? opts)
+                ""
+                (str "wrote " out " (" (count payload) " bytes, " frames " frames)"))}))
+
 (def version "0.1.0")
 
 ;; ── I/O boundary ────────────────────────────────────────────────────────────
@@ -324,6 +362,7 @@
                                  :opts opts
                                  :token-maps (when (:tokens opts)
                                                (token-chain (:tokens opts)))})
+              :spec (spec-job {:input input :text (read-source input) :opts opts})
               :theme (theme-job {:input input :token-maps (token-chain input) :opts opts}))]
     (doseq [{:keys [path content]} (:files job)]
       (write-file! path content))
