@@ -185,7 +185,7 @@ plato theme theme/acme.tokens.edn -o css/acme.css")
       :content-is-open
       [:div
        (content/kicker "The content model")
-       [:h2 "Sixteen kinds, one multimethod"]
+       [:h2 "Seventeen kinds, one multimethod"]
        (content/cards
         [{:title "Media" :body "Images, GIFs, video with poster and sources, audio, iframes."}
          {:title "Prose" :body "Bullets, ordered lists, tables, quotations, callouts, kickers."}
@@ -211,10 +211,14 @@ plato theme theme/acme.tokens.edn -o css/acme.css")
        (content/kicker "Authoring")
        [:h2 "Write it however you think"]
        (content/columns
-        [(content/group [(content/kicker "Markdown")
-                         (content/code :markdown markdown-source)])
-         (content/group [(content/kicker "Org")
-                         (content/code :org org-source)])])]
+        [(content/column
+          (content/group [(content/kicker "Markdown")
+                          (content/code :markdown markdown-source)])
+          {:width :fill})
+         (content/column
+          (content/group [(content/kicker "Org")
+                          (content/code :org org-source)])
+          {:width :fill})])]
       {:notes "Both compile to the same deck value. docs/acme.md and docs/acme.org are the same deck written twice, and CI proves the slide ids and the HTML match."})
 
      (deck/slide

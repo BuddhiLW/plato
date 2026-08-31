@@ -1,6 +1,5 @@
 (ns plato.spec-test
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [plato.content :as content]
             [plato.doc :as doc]
             [plato.markdown :as markdown]
@@ -95,6 +94,12 @@
     (is (= ["card" "card"] (map :kind (:children b))))
     (is (= ["One" "Two"] (map (comp :title :props) (:children b))))
     (is (= "first" (-> b :children first :children first :props :text)))))
+
+(deftest a-column-projects-its-content
+  (let [column (content/column "narrow" {:width {:px 240}})
+        projected (spec/block (content/columns [column]))]
+    (is (= "columns" (:kind projected)))
+    (is (= (spec/block "narrow") (first (:children projected))))))
 
 (deftest a-group-flattens-into-its-parent
   (let [section (doc/section "S" {:blocks [(content/group ["one" "two"]) "three"]})

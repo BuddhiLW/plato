@@ -77,12 +77,27 @@
 (deftest layout-kinds-render
   (is (re-find #"<div class=\"plato-columns\" style=\"grid-template-columns:1fr 2fr\">"
                (html (content/columns [[:p "a"] [:p "b"]] {:widths ["1fr" "2fr"]}))))
-  (let [out (html (content/cards [{:title "One" :body "First" :icon "1"}] {:columns 2 :fragments? true}))]
+  (let [out (html (content/columns
+                   [(content/column [:p "fill"] {:width :fill})
+                    (content/column [:p "shrink"] {:width :shrink})
+                    (content/column [:p "fixed"] {:width {:px 240}})]))]
+    (is (re-find #"<div class=\"plato-column\" style=\"width:100%\"><p>fill</p>" out))
+    (is (re-find #"<div class=\"plato-column\" style=\"width:fit-content\"><p>shrink</p>" out))
+    (is (re-find #"<div class=\"plato-column\" style=\"width:240px\"><p>fixed</p>" out)))
+  (let [out (html (content/cards [{:title "One" :body "First" :icon "1" :width {:px 240}}]
+                                 {:columns 2 :fragments? true}))]
     (is (re-find #"grid-template-columns:repeat\(2, 1fr\)" out))
-    (is (re-find #"<div class=\"plato-card fragment\">" out))
+    (is (re-find #"<div class=\"plato-card fragment\" style=\"width:240px\">" out))
     (is (re-find #"<h3>One</h3>" out)))
-  (is (= "<div class=\"plato-group\"><p>a</p><p>b</p></div>"
-         (html (content/group [[:p "a"] [:p "b"]]))))
+  (is (= "<div class=\"plato-group\" style=\"width:100%\"><p>a</p><p>b</p></div>"
+         (html (content/group [[:p "a"] [:p "b"]] {:width :fill}))))
+  (doseq [width [:wide {:px -1} {:px 1.5} {:px 1 :extra true}]]
+    (is (= {:width width}
+           (try
+             (html (content/group [[:p "a"]] {:width width}))
+             nil
+             (catch clojure.lang.ExceptionInfo ex
+               (ex-data ex))))))
   (is (= "<div class=\"fragment fade-up\" data-fragment-index=\"2\"><p>x</p></div>"
          (html (content/fragment [:p "x"] {:effect :fade-up :index 2})))))
 

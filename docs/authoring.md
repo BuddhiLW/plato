@@ -83,9 +83,10 @@ multimethod. Content maps nested inside hiccup are expanded automatically:
 | `(content/quotation text opts)` | `:cite` |
 | `(content/bullets items opts)` | `:ordered? :fragments? :effect` |
 | `(content/table head rows opts)` | `:caption`; `head` may be `nil` |
-| `(content/columns items opts)` | `:gap :widths` |
-| `(content/cards items opts)` | items are `{:title :body :icon}`; `:columns :fragments?` |
-| `(content/group items opts)` | vertical sequence |
+| `(content/column content opts)` | column value; `:width :fill/:shrink/{:px n}` (`n` is a non-negative integer) |
+| `(content/columns items opts)` | `:gap :widths`; wrap sized items with `content/column` |
+| `(content/cards items opts)` | items are `{:title :body :icon :width}`; `:columns :fragments?` |
+| `(content/group items opts)` | vertical sequence; `:width :fill/:shrink/{:px n}` |
 | `(content/fragment content opts)` | `:effect :index` |
 | `(content/note content opts)` | `:tone :info/:warn/:ok`, `:title` |
 | `(content/kicker text)` | small uppercase label |

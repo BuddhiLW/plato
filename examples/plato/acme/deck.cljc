@@ -150,9 +150,13 @@
       [:div
        [:h2 "One company, one system"]
        (content/columns
-        [(content/image (:logo assets) {:alt "Acme Corp wordmark" :width 320})
-         [:div
-          [:p "The mark, type scale, and scene palette share one token file. Rebrand once; slides, exports, and SVG scenes follow."]]]
+        [(content/column
+          (content/image (:logo assets) {:alt "Acme Corp wordmark" :width 320})
+          {:width :fill})
+         (content/column
+          [:div
+           [:p "The mark, type scale, and scene palette share one token file. Rebrand once; slides, exports, and SVG scenes follow."]]
+          {:width :fill})]
         {:widths ["1fr" "1.4fr"] :gap "2.5rem"})]
       {:notes "The logo is vector, so it stays crisp on the projector."})
 

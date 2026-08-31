@@ -86,9 +86,10 @@ A slide’s `:content` may be hiccup, a Reagent component fn, a Markdown string 
 | `content/quotation` | `<blockquote>` with a citation footer |
 | `content/bullets` | ordered/unordered list, optionally one fragment per item |
 | `content/table` | `<table>` with an optional head row and caption |
+| `content/column` | a value inside `content/columns`, with optional declared width |
 | `content/columns` | responsive grid of content values |
-| `content/cards` | card grid, optionally fragmented |
-| `content/group` | vertical sequence of content values |
+| `content/cards` | card grid, optionally fragmented; cards may declare width |
+| `content/group` | vertical sequence of content values, with optional declared width |
 | `content/fragment` | Reveal fragment wrapper with effect and index |
 | `content/note` | callout box with `:info` / `:warn` / `:ok` tones |
 | `content/kicker` | small uppercase label above a heading |
@@ -96,6 +97,16 @@ A slide’s `:content` may be hiccup, a Reagent component fn, a Markdown string 
 | `content/html` | raw HTML escape hatch |
 
 Content maps nested inside hiccup are expanded automatically, so `[:div [:h2 "Title"] (content/bullets [...])]` works. Add a kind with one `defmethod plato.content/render`.
+
+Columns, individual cards, and groups can carry `:width :fill`, `:width :shrink`,
+or `:width {:px n}` for a non-negative integer `n`. Wrap a column value with `content/column`; the declaration
+is projected identically by live and static HTML rendering:
+
+~~~clojure
+(content/columns
+ [(content/column (content/image "portrait.png") {:width {:px 240}})
+  (content/column (content/bullets ["One" "Two"]) {:width :fill})])
+~~~
 
 ### As Markdown or Org
 

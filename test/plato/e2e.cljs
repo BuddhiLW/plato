@@ -70,6 +70,15 @@
       :js "document.querySelectorAll('section#content-is-open .plato-card').length"
       :ok? #(>= % 4)}]}
 
+   {:url "/index.html#/front-ends"
+    :settle 1200
+    :probes
+    [{:name "declared column widths reached the browser as one CSS width shape"
+      :js (str "Array.from(document.querySelectorAll("
+               "'section#front-ends .plato-column')).map(function(n){"
+               "return n.style.width;}).join(',')")
+      :ok? #(= "100%,100%" %)}]}
+
    {:url "/index.html#/a-deck-is-a-value"
     :settle 1200
     :probes

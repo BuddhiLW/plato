@@ -173,6 +173,8 @@
                                     :rows (mapv #(mapv text-of %) (:rows x))}
                              (seq (text-of (:caption x))) (assoc :caption (text-of (:caption x))))})
 
+      :column (block (:content x))
+
       :columns (node "columns"
                      {:props (cond-> {} (seq (:widths x)) (assoc :widths (mapv str (:widths x))))
                       :children (blocks (:items x))})

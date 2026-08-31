@@ -183,8 +183,35 @@
 
 ;; ── layout ──────────────────────────────────────────────────────────────────
 
+(defn- width-style
+  "Project a declared width to the one CSS shape shared by columns, cards, and groups."
+  [width]
+  (when (some? width)
+    {:width
+     (cond
+       (= :fill width) "100%"
+       (= :shrink width) "fit-content"
+       (and (map? width)
+            (= 1 (count width))
+            (contains? width :px)
+            (integer? (:px width))
+            (not (neg? (:px width))))
+       (str (:px width) "px")
+       :else
+       (throw (ex-info "Invalid :width; expected :fill, :shrink, or {:px n} with non-negative integer n"
+                       {:width width})))}))
+
+(defn column
+  "A value inside `columns`. opts: :width (:fill, :shrink, or {:px n}) :class."
+  ([content] (column content {}))
+  ([content opts] (merge {:plato/type :column :content content} opts)))
+
+(defmethod render :column [{:keys [content width class]}]
+  [:div.plato-column {:class class :style (width-style width)}
+   (expand content)])
+
 (defn columns
-  "Side-by-side content. opts: :gap :widths :class."
+  "Side-by-side content. Wrap an item with `column` to declare its :width. opts: :gap :widths :class."
   ([items] (columns items {}))
   ([items opts] (merge {:plato/type :columns :items (vec items)} opts)))
 
@@ -194,11 +221,12 @@
           :style (cond-> {}
                    gap (assoc :gap gap)
                    (seq widths) (assoc :grid-template-columns (str/join " " widths)))}]
-        (map (fn [item] [:div.plato-column (expand item)]))
+        (map (fn [item]
+               (expand (if (= :column (kind item)) item (column item)))))
         items))
 
 (defn cards
-  "Card grid. Items are {:title :body :icon}. opts: :columns :fragments? :class."
+  "Card grid. Items are {:title :body :icon :width}. opts: :columns :fragments? :class."
   ([items] (cards items {}))
   ([items opts] (merge {:plato/type :cards :items (vec items)} opts)))
 
@@ -207,15 +235,16 @@
          {:class class
           :style (when columns
                    {:grid-template-columns (str "repeat(" columns ", 1fr)")})}]
-        (map (fn [{:keys [title body icon]}]
-               [:div.plato-card {:class (when fragments? "fragment")}
+        (map (fn [{:keys [title body icon width]}]
+               [:div.plato-card {:class (when fragments? "fragment")
+                                 :style (width-style width)}
                 (when icon [:div.plato-card-icon icon])
                 (when title [:h3 (expand title)])
                 (when body [:p (expand body)])]))
         items))
 
 (defn group
-  "Vertical sequence of content values. opts: :class."
+  "Vertical sequence of content values. opts: :width (:fill, :shrink, or {:px n}) :class."
   ([items] (group items {}))
   ([items opts] (merge {:plato/type :group :items (vec items)} opts)))
 
@@ -230,8 +259,10 @@
        (first items)
        (group items opts)))))
 
-(defmethod render :group [{:keys [items class]}]
-  (into [:div.plato-group {:class class}] (map expand) items))
+(defmethod render :group [{:keys [items width class]}]
+  (into [:div.plato-group {:class class :style (width-style width)}]
+        (map expand)
+        items))
 
 (defn fragment
   "Fragment wrapper. opts: :effect :index :class."
