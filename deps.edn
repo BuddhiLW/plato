@@ -2,7 +2,7 @@
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
         reagent/reagent {:mvn/version "2.0.1"}}
  :aliases
- {:dev {:extra-paths ["examples"]}
+ {:dev {:extra-paths ["examples" "scripts"]}
   :test {:extra-paths ["test" "examples"]
          :main-opts ["-m" "plato.test-runner"]}
   :cli {:extra-paths ["examples"]

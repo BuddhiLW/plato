@@ -1,5 +1,9 @@
 {:source-paths ["src" "examples" "test"]
  :dependencies [[reagent "2.0.1"]]
+ ;; vendor-js holds local packages (the reveal highlight plugin source) that
+ ;; must be bundled like node_modules — classpath JS would be run through
+ ;; :advanced and have the Reveal API it calls renamed out from under it.
+ :js-options {:js-package-dirs ["node_modules" "vendor-js"]}
  ;; Pinned rather than left to shadow's defaults: 8080 and 9630 are common
  ;; enough to be taken by something else on a dev machine, and shadow reports a
  ;; failed bind as a log warning and carries on — the dev server is then simply
@@ -7,7 +11,11 @@
  ;; page load serving someone else's app.
  :nrepl {:port 7899}
  :http {:port 9637}
- :dev-http {8086 "public"}
+ ;; 8086 serves the dev tree (the Reagent shells, hot-reloaded); 8087 serves
+ ;; the prerendered site `bb build` writes, so the hive-cljs scenarios can drive
+ ;; the artifact that ships and not only the shell.
+ :dev-http {8086 "public"
+            8087 "dist/site"}
  :builds
  {:e2e  {:target :node-script
          :output-to "target/e2e.js"
@@ -30,4 +38,19 @@
   :fit  {:target :browser
          :output-dir "public/vendor/plato-fit"
          :asset-path "/vendor/plato-fit"
-         :modules {:main {:entries [plato.fit]}}}}}
+         :modules {:main {:entries [plato.fit]}}}
+  ;; The scene island on its own, for a prerendered page. plato.scene-island is
+  ;; the ONE live scene implementation — the Reagent shell mounts it through
+  ;; plato.scene-view — and it carries no view library, so this bundle is the
+  ;; player, the timeline and the SVG renderer and nothing else.
+  :scene {:target :browser
+          :output-dir "public/vendor/plato-scene"
+          :asset-path "/vendor/plato-scene"
+          :modules {:main {:entries [plato.scene-island]}}}
+  ;; Reveal's highlight plugin over highlight.js core and the languages the
+  ;; decks use, for a prerendered page. The shell registers the same
+  ;; plato.highlight; plato.html/plugins names this script.
+  :highlight {:target :browser
+              :output-dir "public/vendor/plato-highlight"
+              :asset-path "/vendor/plato-highlight"
+              :modules {:main {:entries [plato.highlight]}}}}}

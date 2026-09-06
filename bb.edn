@@ -1,0 +1,24 @@
+{:tasks
+ {:requires ([babashka.fs :as fs]
+             [babashka.process :refer [shell]])
+  :init
+  (defn build!
+    "Run the `build` namespace (scripts/build.clj) on the native binary when it
+     is installed, else on the JVM. Same namespace, same plato.html; the two
+     runtimes emit the same bytes, which is what lets CI (JVM) and a laptop
+     (cljw) publish the same site."
+    [& args]
+    (if (fs/which "cljw")
+      (apply shell "cljw" "-cp" "src:examples:resources:scripts" "-m" "build" args)
+      (apply shell "clojure" "-M:dev" "-m" "build" args)))
+
+  assets  {:doc "Vendor the reveal.js dist into public/vendor"
+           :task (build! "assets")}
+  bundles {:doc "Release-build the scripts a prerendered page links: plato-fit, plato-scene, plato-highlight"
+           :task (shell "npx shadow-cljs release fit scene highlight")}
+  site    {:doc "Prerender the site decks and their assets into dist/site"
+           :task (build! "site")}
+  build   {:doc "assets, bundles, site — the tree GitHub Pages publishes"
+           :depends [assets bundles site]}
+  shell   {:doc "Release-build the Reagent dev shells under public/ (browser suite only)"
+           :task (shell "npx shadow-cljs release app acme")}}}

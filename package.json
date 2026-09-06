@@ -9,11 +9,11 @@
     "url": "git+https://github.com/BuddhiLW/plato.git"
   },
   "scripts": {
-    "assets": "node scripts/copy-assets.mjs",
-    "dev": "npm run assets && shadow-cljs watch app acme",
-    "build": "npm run assets && shadow-cljs release app acme",
+    "assets": "bb assets",
+    "dev": "bb assets && shadow-cljs watch app acme",
+    "build": "bb build",
     "test": "clojure -M:test",
-    "e2e": "npm run build && shadow-cljs release e2e fit && npm run e2e:export && node target/e2e.js",
+    "e2e": "bb build && bb shell && shadow-cljs release e2e && npm run e2e:export && node target/e2e.js public shell && node target/e2e.js dist/site site",
     "e2e:export": "clojure -M:cli build test/fixtures/shrink.edn -o public/e2e/shrink-export.html --asset-base ..",
     "check": "npm run test && npm run build",
     "fixtures": "node scripts/gen-fixtures.mjs",
@@ -24,6 +24,7 @@
     "theme": "clojure -M:cli theme theme/plato.tokens.edn -o public/css/plato-theme.css --json theme/plato.tokens.json --cljc src/plato/theme.cljc --sty theme/plato-beamer.sty && clojure -M:cli theme theme/acme.tokens.edn -o public/css/acme-theme.css --sty theme/acme-beamer.sty"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "reveal.js": "6.0.1"

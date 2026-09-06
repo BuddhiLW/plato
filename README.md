@@ -22,7 +22,9 @@ Reveal’s navigation, overview, speaker notes, Markdown, syntax highlighting, m
 
 ## Run the demos
 
-Requirements: JDK 17+, Clojure CLI, Node.js 20+.
+Requirements: JDK 17+, Clojure CLI, Node.js 20+, [babashka](https://babashka.org) for the
+build tasks. [ClojureWasm](https://github.com/clojurewasm) is optional: with `cljw` on the
+path the site is prerendered by the native runtime instead of the JVM.
 
 ~~~bash
 npm install
@@ -32,7 +34,13 @@ npm run dev
 - <http://localhost:8086/> — plato explaining itself: the deck model, the open content and front-end registries, theming, and two live Desargues scenes. This is what ships to [buddhilw.github.io/plato](https://buddhilw.github.io/plato/), and the browser suite drives it, so a slide that stops rendering fails CI.
 - <http://localhost:8086/acme.html> — **Acme Corp — Q3 Product Review**, a 25-slide demo that exercises every content kind: background image and background video, an animated GIF, an inline video with poster and multiple sources, audio, an interactive iframe, stepped code highlighting, a native Reveal markdown slide, math, a metrics table, a card grid, a pull quote, a callout, an auto-animate pair, a vertical stack, and a live Desargues scene.
 
-Production build (both decks): `npm run build`. Full check: `npm run check`.
+What ships is not the dev shell. `npm run build` (`bb build`) prerenders both decks through
+the same exporter the CLI uses — on [ClojureWasm](https://github.com/clojurewasm) when `cljw`
+is installed, on the JVM otherwise — and writes `dist/site/`: HTML first, then Reveal, its
+plugins, and two small islands (the scene player, and the fit gate only for a deck that
+declares `:shrink`). No React, no application bundle, no request to a font or math CDN
+unless the deck asked for math. The browser suite drives that tree as well as the shell,
+under mobile throttling, and prints the paint numbers it gates on. Full check: `npm run check`.
 
 The demo’s media are fixtures generated into `public/assets/acme/`; `npm run fixtures` regenerates them byte-for-byte from `scripts/gen-fixtures.mjs` (needs ffmpeg, ImageMagick and rsvg-convert).
 
@@ -255,7 +263,10 @@ plato theme theme/acme-print.tokens.edn -o public/css/acme-print-theme.css
 `--assets <dir>` copies the `vendor/` and `css/` trees the page links, which is what makes the
 output actually standalone. `--math` opts into the math plugin; it is off by default because the
 vendored build fetches KaTeX from a CDN, and a page that never asked for math should not phone
-home. From the REPL the same thing is a function call:
+home — a deck that declares `{:math? true}` gets it without the flag, in the browser shell too.
+`--live-scenes` links the scene island so Desargues scenes play and scrub in the exported page
+instead of showing their final frame; `--description` sets the page's meta description. From
+the REPL the same thing is a function call:
 
 ~~~clojure
 (require '[plato.html :as html] '[plato.markdown :as markdown])
@@ -279,7 +290,9 @@ home. From the REPL the same thing is a function call:
 | Theming | `plato.tokens`, `plato.css`, `plato.theme`, `plato.json` | CLJ/CLJS/cljw |
 | Static export + CLI | `plato.html`, `plato.cli` | CLJ/cljw |
 | Fit | `plato.fit` | CLJ/CLJS — judging is pure, measuring needs a laid-out page |
+| Islands | `plato.scene-island`, `plato.highlight` | CLJS — also compiled standalone for a prerendered page |
 | Browser shell | `plato.core`, `plato.reveal`, `plato.scene-view`, `plato.player` | CLJS |
+| Site build | `build` (`scripts/build.clj`), `bb.edn` | cljw or JVM; bb orchestrates |
 
 Slide authoring, theming and the fit gate are covered in [docs/authoring.md](docs/authoring.md).
 

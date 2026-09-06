@@ -25,6 +25,7 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.2
         with:
           cli: latest
+          bb: latest
       - run: npm ci
       - run: npm test
       - run: npm run build
@@ -32,6 +33,8 @@ jobs:
   # The JVM suite cannot see whether Reveal accepted the config, whether the
   # markdown plugin left React's <section> alone, or whether a scene starts
   # playing when it scrolls into view. Those are properties of a running page.
+  # The suite runs twice: over the Reagent dev shells, and over the prerendered
+  # site that actually ships.
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -47,6 +50,7 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.2
         with:
           cli: latest
+          bb: latest
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e

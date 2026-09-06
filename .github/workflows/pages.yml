@@ -1,8 +1,9 @@
 name: Pages
 
-# Publishes public/ — the plato deck at the root, the Acme demo beside it.
-# The browser suite already drives both pages, so CI has looked at what this
-# deploys before it goes out.
+# Publishes dist/site — the plato deck at the root, the Acme demo beside it,
+# both prerendered by `bb build` so a visitor gets HTML before any script. The
+# browser suite drives this same tree, so CI has looked at what this deploys
+# before it goes out.
 
 on:
   push:
@@ -34,12 +35,13 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.2
         with:
           cli: latest
+          bb: latest
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: dist/site
 
   deploy:
     needs: build

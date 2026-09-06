@@ -1,0 +1,8 @@
+{
+  "name": "reveal-highlight",
+  "version": "6.0.1",
+  "description": "reveal.js 6.0.1 highlight plugin source over highlight.js core; see plugin.js header. Local package so shadow-cljs bundles it as it does node_modules, without advanced renaming.",
+  "license": "MIT",
+  "type": "module",
+  "main": "plugin.js"
+}
