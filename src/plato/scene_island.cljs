@@ -22,21 +22,52 @@
 
 (defn- fmt [t] (.toFixed t 2))
 
+(def ^:private reveal-show-events
+  "The Reveal events after which a slide's `present` class is settled."
+  ["ready" "slidechanged"])
+
+(defn- shown-in-deck?
+  "Whether `el` is on the slide a Reveal deck is presenting. Outside a deck
+   this is true and geometry is the whole story. Inside one, only the current
+   slide and its stack carry `present`: the fade and none transitions leave
+   every other slide laid out at opacity 0, which an IntersectionObserver
+   reports as on screen."
+  [el]
+  (loop [section (.closest el ".reveal .slides section")]
+    (cond (nil? section) true
+          (not (.contains (.-classList section) "present")) false
+          :else (recur (some-> (.-parentElement section)
+                               (.closest ".reveal .slides section"))))))
+
 (defn- play-when-visible!
-  "Play `browser-player` the first time `el` is on screen. Returns the observer,
-   or nil when the browser has no IntersectionObserver."
+  "Play `browser-player` once, the first time `el` is both on screen and, in a
+   Reveal deck, on the slide being shown. Two signals, either of which
+   re-checks both: an IntersectionObserver for the geometry, and Reveal's
+   `ready` and `slidechanged` events, which bubble up to the document, for
+   the deck. Returns a function that stops waiting, or nil when the browser
+   has no IntersectionObserver."
   [el browser-player]
   (when (and el (exists? js/IntersectionObserver))
-    (let [observer (atom nil)]
-      (reset! observer
-              (js/IntersectionObserver.
-               (fn [entries]
-                 (when (some #(.-isIntersecting %) (array-seq entries))
-                   (.disconnect @observer)
-                   (p/-play! browser-player)))
-               #js {:threshold 0.2}))
-      (.observe @observer el)
-      @observer)))
+    (let [on-screen? (atom false)
+          stop! (atom nil)
+          check! (fn []
+                   (when (and @on-screen? (shown-in-deck? el))
+                     (@stop!)
+                     (p/-play! browser-player)))
+          observer (js/IntersectionObserver.
+                    (fn [entries]
+                      (reset! on-screen? (boolean (.-isIntersecting (last (array-seq entries)))))
+                      (check!))
+                    #js {:threshold 0.2})
+          listener (fn [_] (check!))]
+      (reset! stop! (fn []
+                      (.disconnect observer)
+                      (doseq [t reveal-show-events]
+                        (.removeEventListener js/document t listener))))
+      (doseq [t reveal-show-events]
+        (.addEventListener js/document t listener))
+      (.observe observer el)
+      @stop!)))
 
 (defn- element [doc tag]
   (.createElement doc tag))
@@ -78,8 +109,8 @@
 
 (defn mount!
   "Mount `scene` (a `plato.desargues/scene` value) into `el`, replacing its
-   children. `:autoplay?` starts playback when the element first becomes
-   visible, not when it mounts. Returns a handle for `destroy!`."
+   children. `:autoplay?` starts playback when the element is first shown,
+   not when it mounts. Returns a handle for `destroy!`."
   [el {:keys [graph autoplay? controls?]}]
   (let [graph (desargues/assert-graph! graph)
         doc (.-ownerDocument el)
@@ -110,12 +141,12 @@
     {:el el
      :player browser-player
      :watch-key watch-key
-     :observer (when autoplay? (play-when-visible! el browser-player))}))
+     :stop-autoplay! (when autoplay? (play-when-visible! el browser-player))}))
 
 (defn destroy!
-  "Stop a mounted scene: playback, its frame watch and its visibility observer."
-  [{:keys [player watch-key observer]}]
-  (when observer (.disconnect observer))
+  "Stop a mounted scene: playback, its frame watch and its wait for autoplay."
+  [{:keys [player watch-key stop-autoplay!]}]
+  (when stop-autoplay! (stop-autoplay!))
   (when player
     (remove-watch (player/state-atom player) watch-key)
     (player/destroy! player)))

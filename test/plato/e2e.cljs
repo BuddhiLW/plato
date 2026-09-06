@@ -81,6 +81,28 @@
       :js "document.querySelectorAll('section#animation .plato-scene .plato-transport').length"
       :ok? #(= 1 %)}]}
 
+   ;; Landing on #/animation is not how a viewer gets there. Reveal keeps the
+   ;; slides within viewDistance laid out, and a fade slide sits at opacity 0
+   ;; exactly where the current one is, so an autoplay keyed on geometry alone
+   ;; runs unseen two slides early and the viewer arrives at the last frame.
+   ;; This walks the way a presenter does, dwells on the slide before it long
+   ;; enough for a premature autoplay to run well past the bound below, then
+   ;; steps in and asks whether the scene started on arrival. Measured
+   ;; 2026-09-06 against the defect: without the dwell a 150 ms-per-press walk
+   ;; arrived at 0.93 s, inside any bound loose enough for a real arrival.
+   {:url "/index.html"
+    :settle 1200
+    :steps [[:walk-to "conversion-is-open"] [:wait 2500] [:walk-to "animation"]]
+    :probes
+    [{:name "walked to by arrow key, the scene starts on arrival, not two slides early {on-arrival|later}"
+      :show? true
+      :js (str "new Promise(function(done){"
+               "var read=function(){return (document.querySelector('section#animation output')||{}).textContent||'';};"
+               "var first=read();setTimeout(function(){done(first+'|'+read());},1200);})")
+      :ok? #(let [[first later] (str/split (str %) #"\|")]
+              (and (< (elapsed first) 1.0)
+                   (> (elapsed later) (elapsed first))))}]}
+
    ;; ── the plugins that load late ──────────────────────────────────────────
    ;; notes, search, zoom and math load async and hand themselves to Reveal on
    ;; load. That they load with a clean console proves nothing about whether
@@ -414,12 +436,31 @@
   []
   (if (= "linux" (.-platform js/process)) "Control" "Alt"))
 
+(defn- walk-to!
+  "Press the right arrow, the way a presenter moves, until the slide `id` is
+   the one Reveal presents. A fragment costs a press too, so the walk is
+   bounded by presses rather than by slides; if it runs out, the probes that
+   follow report what they found."
+  [^js page id]
+  (let [there? (str "!!document.querySelector('section#" id ".present')")]
+    (letfn [(step [n]
+              (.then (.evaluate page there?)
+                     (fn [there]
+                       (if (or there (zero? n))
+                         there
+                         (-> (.press (.-keyboard page) "ArrowRight")
+                             (.then (fn [_] (.waitForTimeout page 150)))
+                             (.then (fn [_] (step (dec n)))))))))]
+      (step 80))))
+
 (defn ^:async perform!
   "Run one step against the page, keeping what only the driver can see in
    `state`. Steps are data:
      [:press key]           a key, as Playwright spells it (`s`, `Control+Shift+F`)
      [:press key :popup]    the key opens a window; its title lands under :popup-title
-     [:zoom-click selector] the modifier-click the zoom plugin listens for"
+     [:zoom-click selector] the modifier-click the zoom plugin listens for
+     [:walk-to slide-id]    right-arrow through the deck until that slide is presented
+     [:wait ms]             dwell, as a presenter talking over a slide does"
   [^js page state [op arg flag]]
   (case op
     :press (if (= :popup flag)
@@ -431,7 +472,9 @@
                      (swap! state assoc :popup-title title)
                      (.close popup)))))
              (.press (.-keyboard page) arg))
-    :zoom-click (.click page arg #js {:modifiers #js [(zoom-modifier)]})))
+    :zoom-click (.click page arg #js {:modifiers #js [(zoom-modifier)]})
+    :walk-to (walk-to! page arg)
+    :wait (.waitForTimeout page arg)))
 
 (defn- perform-all!
   "The steps, in order, each after the previous one settled."
