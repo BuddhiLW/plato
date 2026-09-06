@@ -81,6 +81,61 @@
       :js "document.querySelectorAll('section#animation .plato-scene .plato-transport').length"
       :ok? #(= 1 %)}]}
 
+   ;; ── the plugins that load late ──────────────────────────────────────────
+   ;; notes, search, zoom and math load async and hand themselves to Reveal on
+   ;; load. That they load with a clean console proves nothing about whether
+   ;; they WORK after a late registration, so each is driven the way a
+   ;; presenter reaches it, and math the way a reader sees it.
+   ;; The shell loads Reveal as a module, so only the prerendered page has the
+   ;; `Reveal` global to ask; on the shell the behaviours below are the proof.
+   {:url "/index.html"
+    :settle 1200
+    :target :site
+    :probes
+    [{:name "every async plugin registered and initialized after Reveal was ready"
+      :js "['notes','search','zoom'].filter(function(id){return !Reveal.hasPlugin(id);}).join(',')"
+      :ok? #(= "" %)}]}
+
+   {:url "/index.html"
+    :settle 1200
+    :steps [[:press "s" :popup]]
+    :probes
+    [{:name "S opened the speaker view in its own window"
+      :state :popup-title
+      :ok? #(str/includes? (str %) "Speaker View")}]}
+
+   {:url "/index.html"
+    :settle 1200
+    :steps [[:press "Control+Shift+F"]]
+    :probes
+    [{:name "ctrl+shift+F opened the search box and put the cursor in it"
+      :js (str "(function(){var b=document.querySelector('.searchbox');"
+               "return !!b && getComputedStyle(b).display!=='none'"
+               " && document.activeElement===b.querySelector('.searchinput');})()")
+      :ok? true?}]}
+
+   {:url "/index.html"
+    :settle 1200
+    :steps [[:zoom-click ".reveal .slides"]]
+    :probes
+    [{:name "a modifier-click zoomed the page in (the zoom plugin scales <body>)"
+      :js "document.body.style.transform"
+      :ok? #(str/includes? (str %) "scale(2)")}]}
+
+   {:url "/acme.html#/unit-economics"
+    :settle 1500
+    :probes
+    [{:name "KaTeX rendered the formulas from the vendored copy: nothing was fetched off-origin"
+      :show? true
+      :js (str "(function(){"
+               "var off=performance.getEntriesByType('resource')"
+               ".filter(function(r){return r.name.indexOf(location.origin)!==0;})"
+               ".map(function(r){return r.name;});"
+               "return JSON.stringify({katex:document.querySelectorAll('.katex').length,"
+               "                       offOrigin:off});})()")
+      :ok? #(let [{:strs [katex offOrigin]} (js->clj (js/JSON.parse %))]
+              (and (pos? katex) (empty? offOrigin)))}]}
+
    ;; ── the prerendered site ────────────────────────────────────────────────
    ;; What ships is HTML the build wrote, plus Reveal, its plugins and two
    ;; islands. The Reagent shell's bundle must not be on the page at all: the
@@ -335,14 +390,55 @@
 
 (defn- probe-promise
   "One probe -> a promise of its result map. A probe with :show? reports the
-   value it saw even when it passed, so a run is also a measurement."
-  [^js page url {:keys [js ok? name show?]}]
-  (-> (.evaluate page js)
+   value it saw even when it passed, so a run is also a measurement. A probe
+   with :state reads what a step left in the driver's `state` (a popup's
+   title, say) instead of evaluating :js in the page. A probe that throws is
+   a failed check, not a crashed run."
+  [^js page state url {:keys [js ok? name show?] state-key :state}]
+  (-> (if state-key
+        (js/Promise.resolve (get @state state-key))
+        (.evaluate page js))
       (.then (fn [v]
                (let [ok (boolean (ok? v))]
                  {:ok? ok
                   :name (str url " — " name)
-                  :detail (when (or show? (not ok)) (pr-str v))})))))
+                  :detail (when (or show? (not ok)) (pr-str v))})))
+      (.catch (fn [e]
+                {:ok? false
+                 :name (str url " — " name)
+                 :detail (str (or (.-message e) e))}))))
+
+(defn- zoom-modifier
+  "Reveal's zoom plugin listens for ctrl+click on Linux and alt+click on every
+   other platform; the browser the suite drives runs on this host."
+  []
+  (if (= "linux" (.-platform js/process)) "Control" "Alt"))
+
+(defn ^:async perform!
+  "Run one step against the page, keeping what only the driver can see in
+   `state`. Steps are data:
+     [:press key]           a key, as Playwright spells it (`s`, `Control+Shift+F`)
+     [:press key :popup]    the key opens a window; its title lands under :popup-title
+     [:zoom-click selector] the modifier-click the zoom plugin listens for"
+  [^js page state [op arg flag]]
+  (case op
+    :press (if (= :popup flag)
+             (js-await [opened (js/Promise.all #js [(.waitForEvent page "popup")
+                                                     (.press (.-keyboard page) arg)])]
+               (let [^js popup (aget opened 0)]
+                 (js-await [_ (.waitForLoadState popup)]
+                   (js-await [title (.title popup)]
+                     (swap! state assoc :popup-title title)
+                     (.close popup)))))
+             (.press (.-keyboard page) arg))
+    :zoom-click (.click page arg #js {:modifiers #js [(zoom-modifier)]})))
+
+(defn- perform-all!
+  "The steps, in order, each after the previous one settled."
+  [^js page state steps]
+  (reduce (fn [p step] (.then p (fn [_] (perform! page state step))))
+          (js/Promise.resolve nil)
+          steps))
 
 (def perf-init
   "Installed before the page's own scripts: buffers the largest contentful
@@ -369,12 +465,14 @@
         cdp))))
 
 (defn ^:async run-scenario
-  "Open `url`, let the page settle, and answer every probe. The console is a
-   probe too: an error there fails the scenario even when every assertion held.
-   A scenario with :throttle runs under Lighthouse-like mobile conditions."
-  [^js ctx base {:keys [url settle probes throttle]}]
+  "Open `url`, let the page settle, perform the scenario's :steps, and answer
+   every probe. The console is a probe too: an error there fails the scenario
+   even when every assertion held. A scenario with :throttle runs under
+   Lighthouse-like mobile conditions."
+  [^js ctx base {:keys [url settle steps probes throttle]}]
   (js-await [^js page (.newPage ctx)]
-    (let [errors (atom [])]
+    (let [errors (atom [])
+          state (atom {})]
       (.on page "console"
            (fn [^js m] (when (= "error" (.type m)) (swap! errors conj (.text m)))))
       (.on page "pageerror" (fn [e] (swap! errors conj (str e))))
@@ -391,14 +489,15 @@
                                (js/Promise.resolve nil)
                                (.addScriptTag page #js {:url (str base "/vendor/plato-fit/main.js")}))]
                   (js-await [_ (.waitForTimeout page (or settle 1000))]
-                    (js-await [results (js/Promise.all
-                                        (into-array
-                                         (map #(probe-promise page url %) probes)))]
-                      (js-await [_ (.close page)]
-                        (conj (vec results)
-                              {:ok? (empty? @errors)
-                               :name (str url " — the console stayed clean")
-                               :detail (str/join " | " (take 3 @errors))})))))))))))))
+                    (js-await [_ (perform-all! page state steps)]
+                      (js-await [results (js/Promise.all
+                                          (into-array
+                                           (map #(probe-promise page state url %) probes)))]
+                        (js-await [_ (.close page)]
+                          (conj (vec results)
+                                {:ok? (empty? @errors)
+                                 :name (str url " — the console stayed clean")
+                                 :detail (str/join " | " (take 3 @errors))}))))))))))))))
 
 (defn scenarios-for
   "The scenarios that apply to `target` (:shell or :site). A scenario without
@@ -412,19 +511,28 @@
         target (keyword (or target "shell"))
         port 8099
         ^js server (serve root port)
-        base (str "http://127.0.0.1:" port)]
+        base (str "http://127.0.0.1:" port)
+        ;; A throttled scenario is a measurement, and every other page open in
+        ;; the same browser is load on it: run those alone, after the rest, so
+        ;; the number does not move when a scenario is added.
+        [measured probed] ((juxt filter remove) :throttle (scenarios-for target))]
     (println (str "driving " root " as " (name target)))
     (js-await [^js browser (.launch pw/chromium)]
       (js-await [ctx (.newContext browser #js {:viewport #js {:width 1280 :height 800}})]
         (js-await [results (js/Promise.all
-                            (into-array (map #(run-scenario ctx base %)
-                                             (scenarios-for target))))]
-          (js-await [_ (.close browser)]
-            (let [flat (vec (mapcat identity results))
-                  failed (remove :ok? flat)]
-              (run! report flat)
-              (println)
-              (println (str (- (count flat) (count failed)) "/" (count flat)
-                            " checks passed"))
-              (.close server)
-              (set! (.-exitCode js/process) (if (seq failed) 1 0)))))))))
+                            (into-array (map #(run-scenario ctx base %) probed)))]
+          (js-await [timings (reduce (fn [p scenario]
+                                       (.then p (fn [acc]
+                                                  (.then (run-scenario ctx base scenario)
+                                                         #(conj acc %)))))
+                                     (js/Promise.resolve [])
+                                     measured)]
+            (js-await [_ (.close browser)]
+              (let [flat (vec (mapcat identity (concat results timings)))
+                    failed (remove :ok? flat)]
+                (run! report flat)
+                (println)
+                (println (str (- (count flat) (count failed)) "/" (count flat)
+                              " checks passed"))
+                (.close server)
+                (set! (.-exitCode js/process) (if (seq failed) 1 0))))))))))

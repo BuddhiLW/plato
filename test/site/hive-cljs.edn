@@ -59,6 +59,8 @@
     :steps [[:goto "/acme.html"]
             [:wait-for ".reveal .slides section"]
             [:expect-js "!!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"]
+            [:wait-for-js "document.querySelectorAll('.katex').length > 0"]
+            [:expect-js "performance.getEntriesByType('resource').every(function(r){return r.name.indexOf(location.origin)===0;})"]
             [:goto "/index.html"]
             [:wait-for ".reveal .slides section"]
             [:expect-js "!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"]]}]}}
