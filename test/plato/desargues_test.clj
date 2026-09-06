@@ -1,7 +1,8 @@
 (ns plato.desargues-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [plato.desargues :as desargues]
-            [plato.content :as content]))
+            [plato.content :as content]
+            [clojure.edn :as edn]))
 
 (def graph
   {:scene :demo
@@ -40,16 +41,20 @@
     (is (false? (:controls? content)))))
 
 (deftest static-projection-renders-svg
-  (let [[tag svg] (content/render (desargues/scene graph))
+  (let [scene (desargues/scene graph)
+        [tag attrs svg] (content/render scene)
         [svg-tag svg-attrs & groups] svg]
     (is (= :div.plato-scene tag))
     (is (= :svg svg-tag))
     (is (= ":demo" (:aria-label svg-attrs)))
     (is (= (count (:nodes graph)) (count groups)))
-    (is (= [:g] (distinct (map first groups))))))
+    (is (= [:g] (distinct (map first groups))))
+    (testing "the scene value rides along as EDN, so a page carrying the scene
+              bundle can hydrate the element and play what the author declared"
+      (is (= scene (edn/read-string (:data-plato-scene attrs)))))))
 
 (deftest static-projection-covers-every-node
-  (let [[_ svg] (content/render (desargues/scene layout-graph))
+  (let [[_ _ svg] (content/render (desargues/scene layout-graph))
         groups (drop 2 svg)]
     (is (= (count (:nodes layout-graph)) (count groups)))
     (is (= :text (first (nth (first groups) 2))))))

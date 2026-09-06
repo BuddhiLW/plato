@@ -36,8 +36,13 @@
            :controls? true}
           opts)))
 
-(defmethod content/render :desargues [{:keys [graph]}]
+(defmethod content/render :desargues [{:keys [graph] :as scene}]
+  ;; The final frame, plus the scene value itself as EDN in a data attribute:
+  ;; a page that carries the scene bundle reads it back and hydrates the
+  ;; element in place, and a page that does not is exactly the static SVG it
+  ;; always was. The value is what `desargues/scene` returned, so the hydrated
+  ;; scene has the same :autoplay?/:controls? the author declared.
   (let [compiled (timeline/compile-timeline graph)
         frame (timeline/frame compiled (:duration compiled))]
-    [:div.plato-scene
+    [:div.plato-scene {:data-plato-scene (pr-str scene)}
      (render/scene-svg (render/svg-target) graph frame (:node-ids compiled))]))

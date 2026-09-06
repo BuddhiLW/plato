@@ -1,6 +1,5 @@
 (ns plato.player
-  (:require [reagent.core :as r]
-            [plato.clock :as clock]
+  (:require [plato.clock :as clock]
             [plato.protocols :as p]))
 
 (defn- now-seconds []
@@ -33,8 +32,12 @@
                (swap! state clock/tick (now-seconds))
                (request-frame! player))))))
 
-(defn player [duration]
-  (->BrowserPlayer (r/atom (clock/initial-state duration)) (atom nil)))
+(defn player
+  "A browser player over a plain atom. Whoever draws the frames watches the
+   atom (plato.scene-island does), so no view library is needed here and the
+   standalone scene bundle carries none."
+  [duration]
+  (->BrowserPlayer (atom (clock/initial-state duration)) (atom nil)))
 
 (defn state-atom [player]
   (:state player))
