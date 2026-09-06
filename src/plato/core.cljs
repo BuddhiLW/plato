@@ -5,7 +5,8 @@
             [plato.deck :as deck]
             [plato.reveal :as reveal]
             [plato.fit :as fit]
-            [plato.scene-view]))
+            [plato.scene-view]
+            [plato.html :as html]))
 
 (defonce ^:private roots (js/WeakMap.))
 
@@ -48,18 +49,18 @@
      {:display-name "PlatoPresentation"
       :component-did-mount
       (fn [_]
-        (reset! instance
-                (reveal/create! @element (:config model)
-                                ;; The same :math? the exporter reads off the
-                                ;; deck, so a deck that never asked for math
-                                ;; does not fetch it here either.
-                                {:math? (boolean (:math? model))}
-                                ;; Reveal has laid the deck out by now, so this
-                                ;; is the first moment a slide's size is a fact
-                                ;; rather than a guess.
-                                (fn []
-                                  (fit/fitDeck)
-                                  (when on-ready (on-ready))))))
+        ;; The same :math? the exporter reads off the deck, so a deck that
+        ;; never asked for math does not fetch it here either, and the same
+        ;; config the exporter writes, so KaTeX is read from the same copy.
+        (let [opts {:math? (boolean (:math? model))}]
+          (reset! instance
+                  (reveal/create! @element (html/reveal-config model opts) opts
+                                  ;; Reveal has laid the deck out by now, so this
+                                  ;; is the first moment a slide's size is a fact
+                                  ;; rather than a guess.
+                                  (fn []
+                                    (fit/fitDeck)
+                                    (when on-ready (on-ready)))))))
       :component-will-unmount
       (fn [_]
         (reveal/destroy! @instance)

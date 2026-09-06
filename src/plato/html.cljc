@@ -82,10 +82,13 @@
    :needs names the option that must be set for an optional plugin to load.
 
    :async? marks a plugin nothing on the first paint depends on: its script
-   loads async and registers itself on load, and Reveal initializes a plugin
-   registered after it is ready. markdown and highlight are NOT async: one
-   converts sections before layout, the other builds the line-highlight
-   fragments layout counts.
+   loads async and registers itself on load. Reveal initializes a plugin
+   registered after it is ready, and queues one registered before
+   Reveal.initialize ran, so either arrival order works. markdown and
+   highlight are NOT async: one converts sections before layout, the other
+   builds the line-highlight fragments layout counts. math is: KaTeX renders
+   in place and lays the deck out again once it has, and its bundle is the
+   largest script a math deck carries.
 
    highlight is plato's own build of the upstream plugin (plato.highlight):
    highlight.js core plus the languages the decks use, a tenth of the dist
@@ -93,14 +96,14 @@
   [{:file "markdown" :global "RevealMarkdown"}
    {:file "highlight" :src "/vendor/plato-highlight/main.js" :global "RevealHighlight"}
    {:file "notes" :global "RevealNotes" :async? true}
-   {:file "math" :global "RevealMath.KaTeX" :needs :math?}
+   {:file "math" :global "RevealMath.KaTeX" :needs :math? :async? true}
    {:file "search" :global "RevealSearch" :async? true}
    {:file "zoom" :global "RevealZoom" :async? true}])
 
 (defn active-plugins
   "The plugins `opts` enables. An optional plugin stays out unless its :needs
-   option is set: the vendored math build fetches KaTeX from a CDN at init, so
-   a page that never asked for math must not phone home."
+   option is set: math brings the whole of KaTeX with it, and a page without a
+   formula must not carry that."
   [opts]
   (remove (fn [{:keys [needs]}] (and needs (not (get opts needs)))) plugins))
 
@@ -157,6 +160,24 @@
   {:src "/vendor/plato-scene/main.js"
    :async? true
    :call "if (window.plato && plato.scene_island) plato.scene_island.hydrate();"})
+
+(def katex-runtime
+  "Where a page finds KaTeX, relative to :asset-base: the katex npm package's
+   dist tree, vendored by `bb assets`. Reveal's KaTeX plugin reads the path
+   from the config's :katex :local and loads <local>/dist/katex.min.{js,css}
+   and the auto-render extension from there, and never from its CDN default."
+  {:local "/vendor/katex"})
+
+(defn reveal-config
+  "The config handed to Reveal.initialize: the deck's own :config, plus where
+   KaTeX lives when the page carries the math plugin. Both render targets call
+   this, so the live shell and the export point at the same copy. A deck may
+   set its own :katex options (delimiters, macros); only :local is filled in."
+  [deck opts]
+  (let [{:keys [asset-base math?]} (merge default-opts opts)
+        math? (boolean (or math? (:math? deck)))]
+    (cond-> (or (:config deck) {})
+      math? (update :katex #(merge {:local (str asset-base (:local katex-runtime))} %)))))
 
 (defn needs-fit-runtime?
   "Does this deck have to carry plato.fit to render correctly?
@@ -223,7 +244,7 @@
                 live-scenes? (conj [:script {:src (str asset-base (:src scene-runtime))
                                              :async ""}]))
         (into (map (fn [src] [:script {:src src}])) scripts)
-        (conj [:script {:type "text/javascript"} (init-script (:config deck) opts)]))))
+        (conj [:script {:type "text/javascript"} (init-script (reveal-config deck opts) opts)]))))
 
 (defn deck-hiccup
   "Deck -> the whole [:html ...] document. opts: :asset-base :theme :title

@@ -43,7 +43,7 @@
     "      --tokens <path>     token source: generates a theme CSS beside the output and links it"
     "      --asset-base <path> prefix for vendor/ and css/ links (default: .)"
     "      --assets <dir>      copy vendor/ and css/ from <dir> beside the page"
-    "      --math              load the math plugin (it fetches KaTeX from a CDN);"
+    "      --math              load the math plugin, with KaTeX from vendor/katex;"
     "                          implied by a deck that declares {:math? true}"
     "      --fit               load plato.fit so the page can report whether its"
     "                          slides fit; implied by any {:overflow :shrink} slide"

@@ -65,7 +65,7 @@
     (is (str/includes? page "plugins: [RevealMarkdown, RevealHighlight]")))
   (testing "a plugin nothing on the first paint needs loads async and registers
             itself on load — Reveal initializes a plugin registered after ready"
-    (doseq [{:keys [global] :as plugin} (filter :async? html/plugins)]
+    (doseq [{:keys [global] :as plugin} (filter :async? (html/active-plugins html/default-opts))]
       (is (str/includes? page (str "onload=\"Reveal.registerPlugin(" global ")\""))
           global)
       (is (str/includes? page (str "<script async=\"\" onload=\"Reveal.registerPlugin(" global
@@ -127,9 +127,23 @@
             so the exporter and the live shell cannot disagree about it"
     (let [with-math (html/deck->html (assoc model :math? true))]
       (is (str/includes? with-math "/vendor/plugin/math.js"))
-      (is (str/includes? with-math "RevealMath.KaTeX"))))
+      (testing "loaded async, like every plugin the first paint does not need"
+        (is (str/includes? with-math "onload=\"Reveal.registerPlugin(RevealMath.KaTeX)\"")))
+      (testing "and told where the vendored KaTeX is, so the page never phones home"
+        (is (str/includes? with-math "\"katex\":{\"local\":\"./vendor/katex\"}")))))
+  (testing "the config both render targets hand Reveal is one function of the deck"
+    (let [deck (assoc model :math? true :config {:hash true :katex {:macros {"\\R" "\\mathbb{R}"}}})]
+      (is (= {:hash true :katex {:local "./vendor/katex" :macros {"\\R" "\\mathbb{R}"}}}
+             (html/reveal-config deck {}))
+          "a deck's own :katex options survive, only :local is filled in")
+      (is (= {:hash true :katex {:local "/talk/vendor/katex" :macros {"\\R" "\\mathbb{R}"}}}
+             (html/reveal-config deck {:asset-base "/talk"}))
+          "and it follows :asset-base like every other vendored file")
+      (is (= {:hash true} (html/reveal-config (assoc model :config {:hash true}) {}))
+          "a deck without math carries no KaTeX config at all")))
   (testing "and a deck that does not still pays nothing for it"
-    (is (not (str/includes? page "/vendor/plugin/math.js")))))
+    (is (not (str/includes? page "/vendor/plugin/math.js")))
+    (is (not (str/includes? page "katex")))))
 
 (deftest description-becomes-a-meta-tag
   (testing "absent by default"

@@ -34,6 +34,24 @@
                      [(str "plugin/" file ".js") (str "plugin/" file ".js")])))
         html/plugins))
 
+(def katex-dist "node_modules/katex/dist")
+
+(defn katex-files
+  "katex dist path -> public/vendor/katex/dist path: the script, the sheet,
+   the two extensions the Reveal plugin can load, and the woff2 faces. The
+   sheet names woff2 first, so a browser that takes it never asks for the
+   woff or ttf beside it, and those stay out."
+  []
+  (into [["katex.min.js" "katex.min.js"]
+         ["katex.min.css" "katex.min.css"]
+         ["contrib/auto-render.min.js" "contrib/auto-render.min.js"]
+         ["contrib/mhchem.min.js" "contrib/mhchem.min.js"]]
+        (comp (map (fn [^java.io.File f] (.getName f)))
+              (filter #(str/ends-with? % ".woff2"))
+              (map (fn [n] [(str "fonts/" n) (str "fonts/" n)])))
+        (sort-by (fn [^java.io.File f] (.getName f))
+                 (.listFiles (io/file (str katex-dist "/fonts"))))))
+
 (defn- copy-file! [from to]
   (let [dest (io/file to)]
     (when-let [parent (.getParentFile dest)] (.mkdirs parent))
@@ -61,7 +79,11 @@
     (copy-file! (str reveal-dist "/" from) (str "public/vendor/" to)))
   (let [theme "public/vendor/theme/night.css"]
     (cli/write-file! theme (strip-font-imports (slurp (str reveal-dist "/theme/night.css")))))
-  (println (str "vendored " (count vendor-files) " reveal.js files into public/vendor")))
+  (println (str "vendored " (count vendor-files) " reveal.js files into public/vendor"))
+  (let [katex (katex-files)]
+    (doseq [[from to] katex]
+      (copy-file! (str katex-dist "/" from) (str "public/vendor/katex/dist/" to)))
+    (println (str "vendored " (count katex) " KaTeX files into public/vendor/katex"))))
 
 (def out-dir "dist/site")
 
