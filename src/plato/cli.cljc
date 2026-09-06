@@ -37,14 +37,18 @@
     "  -o, --out <path>        output HTML (default: the source with a .html suffix)"
     "      --deck <ns/var>     build the deck a var holds instead of a source file"
     "      --title <string>    page title (default: the deck title)"
+    "      --description <s>   page meta description (default: the deck's :description)"
     "      --theme <name>      Reveal theme name (default: night)"
     "      --theme-css <path>  extra stylesheet to link, as authored"
     "      --tokens <path>     token source: generates a theme CSS beside the output and links it"
     "      --asset-base <path> prefix for vendor/ and css/ links (default: .)"
     "      --assets <dir>      copy vendor/ and css/ from <dir> beside the page"
-    "      --math              load the math plugin (it fetches KaTeX from a CDN)"
+    "      --math              load the math plugin (it fetches KaTeX from a CDN);"
+    "                          implied by a deck that declares {:math? true}"
     "      --fit               load plato.fit so the page can report whether its"
     "                          slides fit; implied by any {:overflow :shrink} slide"
+    "      --live-scenes       load the scene bundle so Desargues scenes play and"
+    "                          scrub in the page instead of showing their final frame"
     "      --print             write the page to stdout instead of a file"
     ""
     "spec options — emit an AutoPDF DocumentSpec, for a Beamer PDF of the same source"
@@ -66,6 +70,7 @@
   {"-o" [:out 1] "--out" [:out 1]
    "--deck" [:deck 1]
    "--title" [:title 1]
+   "--description" [:description 1]
    "--theme" [:theme 1]
    "--theme-css" [:theme-css 1]
    "--tokens" [:tokens 1]
@@ -73,6 +78,7 @@
    "--assets" [:assets 1]
    "--math" [:math? 0]
    "--fit" [:fit? 0]
+   "--live-scenes" [:live-scenes? 0]
    "--json" [:json 1]
    "--cljc" [:cljc 1]
    "--sty" [:sty 1]
@@ -177,8 +183,10 @@
               model
               (cond-> {:stylesheets sheets}
                 (:title opts) (assoc :title (:title opts))
+                (:description opts) (assoc :description (:description opts))
                 (:math? opts) (assoc :math? true)
                 (:fit? opts) (assoc :fit? true)
+                (:live-scenes? opts) (assoc :live-scenes? true)
                 (:asset-base opts) (assoc :asset-base (:asset-base opts))
                 (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))
                 (assoc :theme (or (:theme opts)
@@ -273,7 +281,9 @@
   #?(:cljs nil
      :default (slurp path)))
 
-(defn- write-file! [path content]
+(defn write-file!
+  "Write `content` to `path`, creating parent directories."
+  [path content]
   #?(:cljs nil
      :default (do (when-let [parent (.getParentFile (java.io.File. ^String path))]
                     (.mkdirs parent))
@@ -337,14 +347,17 @@
         (recur (relative-to path parent) (conj seen path) acc)
         (vec acc)))))
 
-(defn- copy-tree!
+(defn copy-tree!
   "Copy the file tree at `from` to `to`, creating directories. A missing source
    is skipped rather than fatal: a page without vendored assets is still a page,
    and the summary already says what was copied.
 
    `tree-seq` and `clojure.java.io/copy` are the portable spelling: the JVM's
    `file-seq` and `java.nio.file.Files` are absent from the native runtime, and
-   `io/copy` is byte-exact on both, so a vendored font survives the copy."
+   `io/copy` is byte-exact on both, so a vendored font survives the copy.
+
+   Public because it is the one file primitive the build script needs on every
+   runtime the CLI runs on."
   [from to]
   #?(:cljs nil
      :default

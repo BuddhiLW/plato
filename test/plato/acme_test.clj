@@ -132,7 +132,7 @@
     (is (str/includes? page "class=\"language-clojure\""))
     (is (str/includes? page "data-line-numbers=\"1|3-5|\"")))
   (testing "native markdown section and a markdown block"
-    (is (str/includes? page "<section id=\"release-notes\" data-markdown=\"\">"))
+    (is (str/includes? page "<section id=\"release-notes\"><div data-markdown=\"\">"))
     (is (str/includes? page "<textarea data-template=\"\">## Shipped in Q3"))
     (is (str/includes? page "<div data-markdown=\"\">")))
   (testing "math delimiters survive serialization"

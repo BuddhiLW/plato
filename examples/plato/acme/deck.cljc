@@ -110,7 +110,11 @@
 (def model
   (deck/deck
    {:title "Acme Corp — Q3 Product Review"
+    :description "Acme Corp — Q3 Product Review, the Plato flagship demo deck"
     :lang "en"
+    ;; The :margins slide sets a formula in \( \), so this deck asks for the
+    ;; math plugin. Both render targets read this one key.
+    :math? true
     :config {:hash true
              :history true
              :controls true

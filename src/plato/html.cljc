@@ -31,13 +31,19 @@
 
    Markdown rides in a <textarea data-template>, Reveal's RCDATA container: the
    browser escapes its content, so markdown holding </script> cannot break out
-   of the page. :notes is a content value and is rendered like any other."
+   of the page. data-markdown goes on a NESTED div, never on the section: the
+   plugin replaces the innerHTML of the element it finds it on, and on the
+   section that swallows the notes aside beside the template. Same container
+   rule as plato.core/slide-view; only the template element differs, because
+   a serialized page and a React tree are different threat models.
+   :notes is a content value and is rendered like any other."
   [{:keys [content notes] :as slide}]
   (let [attrs (deck/section-attrs slide)
         aside (when notes [:aside.notes (content/render notes)])]
     (if (string? content)
-      [:section (assoc attrs :data-markdown "")
-       [:textarea {:data-template ""} content]
+      [:section attrs
+       [:div {:data-markdown ""}
+        [:textarea {:data-template ""} content]]
        aside]
       [:section attrs
        (content/render content)
@@ -63,21 +69,33 @@
    :theme "night"
    :math? false
    :fit? false
+   :live-scenes? false
    :stylesheets []
    :scripts []})
 
 (def plugins
-  "Reveal dist plugins, in load order. :file is served from
-   <asset-base>/vendor/plugin/<file>.js and :global is the UMD name handed to
-   Reveal.initialize — one definition with two projections, so a plugin can
-   never be scripted without being registered, or registered without a script.
-   :needs names the option that must be set for an optional plugin to load."
+  "Reveal plugins, in load order. :file is served from
+   <asset-base>/vendor/plugin/<file>.js unless :src names another path under
+   :asset-base, and :global is the UMD name handed to Reveal — one definition
+   with two projections, so a plugin can never be scripted without being
+   registered, or registered without a script.
+   :needs names the option that must be set for an optional plugin to load.
+
+   :async? marks a plugin nothing on the first paint depends on: its script
+   loads async and registers itself on load, and Reveal initializes a plugin
+   registered after it is ready. markdown and highlight are NOT async: one
+   converts sections before layout, the other builds the line-highlight
+   fragments layout counts.
+
+   highlight is plato's own build of the upstream plugin (plato.highlight):
+   highlight.js core plus the languages the decks use, a tenth of the dist
+   plugin's size, and the same module the Reagent shell registers."
   [{:file "markdown" :global "RevealMarkdown"}
-   {:file "highlight" :global "RevealHighlight"}
-   {:file "notes" :global "RevealNotes"}
+   {:file "highlight" :src "/vendor/plato-highlight/main.js" :global "RevealHighlight"}
+   {:file "notes" :global "RevealNotes" :async? true}
    {:file "math" :global "RevealMath.KaTeX" :needs :math?}
-   {:file "search" :global "RevealSearch"}
-   {:file "zoom" :global "RevealZoom"}])
+   {:file "search" :global "RevealSearch" :async? true}
+   {:file "zoom" :global "RevealZoom" :async? true}])
 
 (defn active-plugins
   "The plugins `opts` enables. An optional plugin stays out unless its :needs
@@ -86,18 +104,34 @@
   [opts]
   (remove (fn [{:keys [needs]}] (and needs (not (get opts needs)))) plugins))
 
+(defn plugin-src
+  "A plugin's script path relative to :asset-base: its :src when it has one,
+   else /vendor/plugin/<file>.js."
+  [{:keys [file src]}]
+  (or src (str "/vendor/plugin/" file ".js")))
+
 (defn plugin-scripts
-  "Basenames of the plugin scripts `opts` enables, in load order. Each is
-   served from <asset-base>/vendor/plugin/<name>.js."
+  "Script paths of the plugins `opts` enables, relative to :asset-base, in
+   load order."
   [opts]
-  (mapv :file (active-plugins opts)))
+  (mapv plugin-src (active-plugins opts)))
+
+(defn plugin-script-tag
+  "The <script> for one plugin. An :async? plugin loads off the critical path
+   and hands itself to Reveal on load; the others are ordinary sync scripts
+   the bootstrap names in its plugins list."
+  [asset-base {:keys [global async?] :as plugin}]
+  [:script (cond-> {:src (str asset-base (plugin-src plugin))}
+             async? (assoc :async ""
+                           :onload (str "Reveal.registerPlugin(" global ")")))])
 
 (defn plugin-globals
-  "Globals the enabled UMD plugin builds define, as passed to
-   Reveal.initialize. RevealMath is a plugin object carrying its variants;
-   KaTeX is the selected one."
+  "Globals of the plugins Reveal.initialize registers up front: the enabled,
+   non-async ones. An async plugin registers itself when its script lands.
+   RevealMath is a plugin object carrying its variants; KaTeX is the selected
+   one."
   [opts]
-  (mapv :global (active-plugins opts)))
+  (mapv :global (remove :async? (active-plugins opts))))
 
 (def fit-runtime
   "The standalone plato.fit bundle, relative to :asset-base, and the call that
@@ -106,6 +140,23 @@
    definition rather than a second one written for it."
   {:src "/vendor/plato-fit/main.js"
    :call "plato.fit.fitDeck();"})
+
+(def scene-runtime
+  "The standalone scene bundle, relative to :asset-base, and the call that
+   hydrates every `[data-plato-scene]` element into a live, scrub-able scene.
+   Built by the shadow :scene target — the SAME plato.scene-island the Reagent
+   shell mounts through plato.scene-view, compiled on its own, so an exported
+   page plays a scene by one definition rather than a second one written for
+   it. Opt-in through :live-scenes?: without it an export stays the standalone
+   final-frame page it always was.
+
+   The script is loaded async: a scene is never on the first slide's critical
+   path, so it must not hold up Reveal's first paint. Either side may arrive
+   first, so the bootstrap's call is guarded and the bundle also hydrates
+   itself on load when the deck is already ready; hydrate is idempotent."
+  {:src "/vendor/plato-scene/main.js"
+   :async? true
+   :call "if (window.plato && plato.scene_island) plato.scene_island.hydrate();"})
 
 (defn needs-fit-runtime?
   "Does this deck have to carry plato.fit to render correctly?
@@ -122,55 +173,69 @@
   "Inline Reveal bootstrap source for `config`, registering the plugins `opts`
    enables.
 
-   With :fit? set the bootstrap also starts plato.fit. It chains off the promise
-   `Reveal.initialize` returns rather than calling straight through: that
-   promise resolves once the deck is laid out, which is the first moment a
-   slide's size is a fact rather than a guess."
+   With :fit? set the bootstrap also starts plato.fit, and with :live-scenes?
+   it hydrates the scenes. Both chain off the promise `Reveal.initialize`
+   returns rather than calling straight through: that promise resolves once the
+   deck is laid out, which is the first moment a slide's size is a fact rather
+   than a guess."
   ([config] (init-script config {}))
-  ([config {:keys [fit?] :as opts}]
-   (str "Reveal.initialize(Object.assign("
-        (->json (or config {}))
-        ", {plugins: [" (str/join ", " (plugin-globals opts)) "]}))"
-        (when fit? (str ".then(function () { " (:call fit-runtime) " })"))
-        ";")))
+  ([config {:keys [fit? live-scenes?] :as opts}]
+   (let [calls (cond-> []
+                 fit? (conj (:call fit-runtime))
+                 live-scenes? (conj (:call scene-runtime)))]
+     (str "Reveal.initialize(Object.assign("
+          (->json (or config {}))
+          ", {plugins: [" (str/join ", " (plugin-globals opts)) "]}))"
+          (when (seq calls)
+            (str ".then(function () { " (str/join " " calls) " })"))
+          ";"))))
 
 (defn- stylesheet [href]
   [:link {:rel "stylesheet" :href href}])
 
-(defn- head-hiccup [deck {:keys [asset-base theme title stylesheets]}]
-  (into [:head
-         [:meta {:charset "utf-8"}]
-         [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-         [:title (or title (:title deck) "Plato")]
-         ;; reveal.js 6 ships reset.css separately from reveal.css; without it
-         ;; the page inherits the browser's default margins.
-         (stylesheet (str asset-base "/vendor/reset.css"))
-         (stylesheet (str asset-base "/vendor/reveal.css"))
-         (stylesheet (str asset-base "/vendor/theme/" (name theme) ".css"))
-         (stylesheet (str asset-base "/vendor/highlight/monokai.css"))
-         (stylesheet (str asset-base "/css/plato.css"))]
-        (map stylesheet)
-        stylesheets))
+(defn- head-hiccup [deck {:keys [asset-base theme title description stylesheets]}]
+  (let [description (or description (:description deck))]
+    (into (cond-> [:head
+                   [:meta {:charset "utf-8"}]
+                   [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]]
+            description (conj [:meta {:name "description" :content description}])
+            true (conj [:title (or title (:title deck) "Plato")]
+                       ;; reveal.js 6 ships reset.css separately from reveal.css;
+                       ;; without it the page inherits the browser's default margins.
+                       (stylesheet (str asset-base "/vendor/reset.css"))
+                       (stylesheet (str asset-base "/vendor/reveal.css"))
+                       (stylesheet (str asset-base "/vendor/theme/" (name theme) ".css"))
+                       (stylesheet (str asset-base "/vendor/highlight/monokai.css"))
+                       (stylesheet (str asset-base "/css/plato.css"))))
+          (map stylesheet)
+          stylesheets)))
 
-(defn- body-hiccup [deck {:keys [asset-base scripts] :as opts}]
+(defn- body-hiccup [deck {:keys [asset-base scripts after-slides] :as opts}]
   (let [fit? (or (:fit? opts) (needs-fit-runtime? deck))
-        opts (assoc opts :fit? fit?)]
+        live-scenes? (boolean (:live-scenes? opts))
+        opts (assoc opts :fit? fit? :live-scenes? live-scenes?)]
     (-> [:body
-         [:div.reveal (slides-hiccup deck)]
-         [:script {:src (str asset-base "/vendor/reveal.js")}]]
-        (into (map (fn [plugin]
-                     [:script {:src (str asset-base "/vendor/plugin/" plugin ".js")}]))
-              (plugin-scripts opts))
-        (cond-> fit? (conj [:script {:src (str asset-base (:src fit-runtime))}]))
+         [:div.reveal (slides-hiccup deck)]]
+        (into after-slides)
+        (conj [:script {:src (str asset-base "/vendor/reveal.js")}])
+        (into (map #(plugin-script-tag asset-base %)) (active-plugins opts))
+        (cond-> fit? (conj [:script {:src (str asset-base (:src fit-runtime))}])
+                live-scenes? (conj [:script {:src (str asset-base (:src scene-runtime))
+                                             :async ""}]))
         (into (map (fn [src] [:script {:src src}])) scripts)
         (conj [:script {:type "text/javascript"} (init-script (:config deck) opts)]))))
 
 (defn deck-hiccup
   "Deck -> the whole [:html ...] document. opts: :asset-base :theme :title
-   :stylesheets :scripts."
+   :description :stylesheets :scripts :math? :fit? :live-scenes? :after-slides.
+
+   :math? is read off the deck as well as the opts: a deck that declares
+   {:math? true} has said it needs the plugin, and the live shell reads the
+   same key, so the two render targets cannot disagree about it."
   ([deck] (deck-hiccup deck {}))
   ([deck opts]
-   (let [opts (merge default-opts opts)]
+   (let [opts (-> (merge default-opts opts)
+                  (assoc :math? (boolean (or (:math? opts) (:math? deck)))))]
      [:html {:lang (or (:lang deck) "en")}
       (head-hiccup deck opts)
       (body-hiccup deck opts)])))

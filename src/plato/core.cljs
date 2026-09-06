@@ -50,6 +50,10 @@
       (fn [_]
         (reset! instance
                 (reveal/create! @element (:config model)
+                                ;; The same :math? the exporter reads off the
+                                ;; deck, so a deck that never asked for math
+                                ;; does not fetch it here either.
+                                {:math? (boolean (:math? model))}
                                 ;; Reveal has laid the deck out by now, so this
                                 ;; is the first moment a slide's size is a fact
                                 ;; rather than a guess.
