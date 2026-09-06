@@ -1,5 +1,5 @@
 (ns plato.e2e
-  "Browser checks for the live shell, as data.
+  "Browser checks for the live shell and the prerendered site, as data.
 
    The JVM suite cannot see any of this: whether Reveal actually accepted the
    deck config, whether the markdown plugin left React's <section> alone,
@@ -8,11 +8,17 @@
 
    A scenario is a URL plus probes; a probe is a JavaScript expression and a
    predicate over its value. Adding a check means adding a map, never touching
-   the driver."
+   the driver.
+
+   Two trees answer: public/ holds the Reagent dev shells, dist/site the
+   prerendered pages `bb build` publishes. A scenario names which with
+   :target (:shell, :site, or :both, the default); the driver takes the root
+   and the target as its two arguments."
   (:require ["playwright" :as pw]
             ["node:http" :as http]
             ["node:fs" :as fs]
             ["node:path" :as path]
+            ["node:zlib" :as zlib]
             [clojure.string :as str]
             [shadow.cljs.modern :refer (js-await)]))
 
@@ -34,8 +40,13 @@
       :js "(document.querySelector('section#arr-scene output')||{}).textContent||''"
       :ok? #(pos? (elapsed %))}]}
 
+   ;; The shell's markdown container is a React decision: the plugin rewrites
+   ;; the element it finds data-markdown on, so it must never be the <section>
+   ;; React owns. The exporter serializes and has no such owner, so it puts the
+   ;; attribute on the section itself — see plato.core/slide-view.
    {:url "/acme.html#/release-notes"
     :settle 1200
+    :target :shell
     :probes
     [{:name "React still owns <section id=release-notes>"
       :js "!!document.querySelector('section#release-notes')"
@@ -44,8 +55,12 @@
       :js (str "(function(){var s=document.querySelector('section#release-notes');"
                "return !!s && !!s.querySelector('div[data-markdown]')"
                " && !s.hasAttribute('data-markdown');})()")
-      :ok? true?}
-     {:name "the markdown was converted in place"
+      :ok? true?}]}
+
+   {:url "/acme.html#/release-notes"
+    :settle 1200
+    :probes
+    [{:name "the markdown was converted in place"
       :js (str "(function(){var s=document.querySelector('section#release-notes');"
                "return !!s && /<h2|<ul|<li/i.test(s.innerHTML);})()")
       :ok? true?}
@@ -58,7 +73,80 @@
     :probes
     [{:name "the site deck's scene autoplayed too"
       :js "(document.querySelector('section#animation output')||{}).textContent||''"
-      :ok? #(pos? (elapsed %))}]}
+      :ok? #(pos? (elapsed %))}
+     ;; On the prerendered page this is the island hydrating the static SVG
+     ;; the moment the slide came on screen; on the shell it is the same
+     ;; island mounted by the Reagent wrapper. One DOM shape either way.
+     {:name "the scene is live: one transport inside the scene element"
+      :js "document.querySelectorAll('section#animation .plato-scene .plato-transport').length"
+      :ok? #(= 1 %)}]}
+
+   ;; ── the prerendered site ────────────────────────────────────────────────
+   ;; What ships is HTML the build wrote, plus Reveal, its plugins and two
+   ;; islands. The Reagent shell's bundle must not be on the page at all: the
+   ;; whole point of prerendering is that nothing paints late waiting for it.
+   {:url "/index.html"
+    :settle 1200
+    :target :site
+    :probes
+    [{:name "the site deck is prerendered: slides are in the HTML the server sent, before any script"
+      ;; The served bytes, not the live DOM: the driver itself injects a
+      ;; script into the head, and Reveal adds elements of its own.
+      :js (str "fetch(location.pathname).then(function(r){return r.text();})"
+               ".then(function(h){return h.indexOf('<section') < h.indexOf('<script');})")
+      :ok? true?}
+     {:name "no application bundle is loaded, only Reveal, its plugins and the islands"
+      :js (str "Array.from(document.scripts).map(function(s){return s.src;})"
+               ".filter(Boolean).filter(function(s){return !/\\/vendor\\//.test(s);}).length")
+      :ok? zero?}
+     {:name "math stays off a deck that never asked for it, so the page does not phone home"
+      :js "!!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"
+      :ok? false?}]}
+
+   ;; The number the whole build step exists for, measured the way Lighthouse's
+   ;; mobile preset measures it (4x CPU, 1.6 Mbps, 150 ms RTT) rather than on a
+   ;; warm localhost. FCP and LCP are the paints; TBT is the sum of long-task
+   ;; time past 50 ms after first paint. The values are printed on every run,
+   ;; and the thresholds are the gate: tighten them as the bundles shrink.
+   ;;
+   ;; Calibration, 2026-09-06, over this HTTP/1.1 server: the client-rendered
+   ;; shell measured FCP 14.2 s here; the prerendered site with the slim
+   ;; highlight plugin and self-hosted fonts measured 4.4 s, TBT 35 ms
+   ;; (Lighthouse's own simulation of the same page: FCP 3.1 s, score 86).
+   ;; What is left is Reveal laying out every slide, which no bundle change
+   ;; moves. So the gate is set just above the measurement, and a regression
+   ;; of a second is what it catches.
+   {:url "/index.html"
+    :settle 2500
+    :target :site
+    :throttle {:cpu 4}
+    :probes
+    [{:name "paint and blocking under mobile throttling {fcp lcp tbt} ms"
+      :show? true
+      :js (str "(function(){var p=window.__plato_perf||{lcp:0,long:[]};"
+               "var fcp=(performance.getEntriesByName('first-contentful-paint')[0]||{}).startTime||0;"
+               "var tbt=p.long.filter(function(x){return x[0]+x[1]>fcp;})"
+               ".reduce(function(a,x){return a+Math.max(0,x[1]-50);},0);"
+               "return JSON.stringify({fcp:Math.round(fcp),lcp:Math.round(p.lcp),tbt:Math.round(tbt)});})()")
+      :ok? #(let [{:strs [fcp lcp tbt]} (js->clj (js/JSON.parse %))]
+              (and (< 0 fcp 5000) (< 0 lcp 5500) (< tbt 300)))}
+     {:name "script bytes on the wire (gzip), every script the page loads"
+      :show? true
+      :js (str "performance.getEntriesByType('resource')"
+               ".filter(function(r){return r.initiatorType==='script';})"
+               ".reduce(function(a,r){return a+(r.transferSize||r.encodedBodySize||0);},0)")
+      :ok? #(< % 250000)}]}
+
+   {:url "/acme.html"
+    :settle 1200
+    :target :site
+    :probes
+    [{:name "the Acme deck declared :math?, so its page carries the plugin"
+      :js "!!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"
+      :ok? true?}
+     {:name "the backlink to the engine page is on the Acme page"
+      :js "!!document.querySelector('a.plato-backlink[href=\"./index.html\"]')"
+      :ok? true?}]}
 
    ;; The published site is a fixture, not just a page: these are the slides a
    ;; visitor is most likely to land on, so a content kind that stops rendering
@@ -183,6 +271,7 @@
    ;; e2e:export`, whose slide overflows on purpose.
    {:url "/e2e/shrink-export.html"
     :settle 1200
+    :target :shell
     :probes
     [{:name "an exported deck shrinks the slide that asked to be shrunk"
       :js (str "(function(){"
@@ -211,6 +300,11 @@
    ".json" "application/json" ".svg" "image/svg+xml" ".png" "image/png"
    ".jpg" "image/jpeg" ".gif" "image/gif" ".mp4" "video/mp4" ".mp3" "audio/mpeg"})
 
+(def compressible
+  "Types served gzipped, as GitHub Pages serves them — so a byte or timing
+   probe here measures what a visitor pays, not the raw file."
+  #{".html" ".js" ".css" ".json" ".svg"})
+
 (defn- serve
   "Serve `root` on `port`; returns the node server."
   [root port]
@@ -218,12 +312,18 @@
          http
          (fn [^js req ^js res]
            (let [url (first (str/split (.-url req) #"[?#]"))
-                 file (path/join root (if (= "/" url) "/index.html" url))]
+                 file (path/join root (if (= "/" url) "/index.html" url))
+                 ext (path/extname file)]
              (if (and (fs/existsSync file) (.isFile (fs/statSync file)))
-               (do (.writeHead res 200 #js {"Content-Type"
-                                            (get content-types (path/extname file)
-                                                 "application/octet-stream")})
-                   (.end res (fs/readFileSync file)))
+               (let [body (fs/readFileSync file)
+                     gzip? (and (contains? compressible ext)
+                                (str/includes? (or (aget (.-headers req) "accept-encoding") "")
+                                               "gzip"))]
+                 (.writeHead res 200
+                             (cond-> #js {"Content-Type" (get content-types ext
+                                                              "application/octet-stream")}
+                               gzip? (doto (aset "Content-Encoding" "gzip"))))
+                 (.end res (if gzip? (zlib/gzipSync body) body)))
                (do (.writeHead res 404) (.end res "not found"))))))
     (.listen port "127.0.0.1")))
 
@@ -234,46 +334,91 @@
                 (when (seq (str detail)) (str "  — " detail)))))
 
 (defn- probe-promise
-  "One probe -> a promise of its result map."
-  [^js page url {:keys [js ok? name]}]
+  "One probe -> a promise of its result map. A probe with :show? reports the
+   value it saw even when it passed, so a run is also a measurement."
+  [^js page url {:keys [js ok? name show?]}]
   (-> (.evaluate page js)
       (.then (fn [v]
                (let [ok (boolean (ok? v))]
                  {:ok? ok
                   :name (str url " — " name)
-                  :detail (when-not ok (pr-str v))})))))
+                  :detail (when (or show? (not ok)) (pr-str v))})))))
+
+(def perf-init
+  "Installed before the page's own scripts: buffers the largest contentful
+   paint and every long task, which no probe could observe after the fact."
+  (str "window.__plato_perf={lcp:0,long:[]};"
+       "new PerformanceObserver(function(l){l.getEntries().forEach(function(e){"
+       "window.__plato_perf.lcp=e.startTime;});})"
+       ".observe({type:'largest-contentful-paint',buffered:true});"
+       "new PerformanceObserver(function(l){l.getEntries().forEach(function(e){"
+       "window.__plato_perf.long.push([e.startTime,e.duration]);});})"
+       ".observe({type:'longtask',buffered:true});"))
+
+(defn ^:async throttle!
+  "Slow the page down the way Lighthouse's mobile preset does: a 4x CPU and a
+   1.6 Mbps / 150 ms round-trip network, through the DevTools protocol."
+  [^js ctx ^js page {:keys [cpu latency download upload]}]
+  (js-await [^js cdp (.newCDPSession ctx page)]
+    (js-await [_ (.send cdp "Emulation.setCPUThrottlingRate" #js {:rate (or cpu 4)})]
+      (js-await [_ (.send cdp "Network.emulateNetworkConditions"
+                          #js {:offline false
+                               :latency (or latency 150)
+                               :downloadThroughput (or download 204800)
+                               :uploadThroughput (or upload 84000)})]
+        cdp))))
 
 (defn ^:async run-scenario
   "Open `url`, let the page settle, and answer every probe. The console is a
-   probe too: an error there fails the scenario even when every assertion held."
-  [^js ctx base {:keys [url settle probes]}]
+   probe too: an error there fails the scenario even when every assertion held.
+   A scenario with :throttle runs under Lighthouse-like mobile conditions."
+  [^js ctx base {:keys [url settle probes throttle]}]
   (js-await [^js page (.newPage ctx)]
     (let [errors (atom [])]
       (.on page "console"
            (fn [^js m] (when (= "error" (.type m)) (swap! errors conj (.text m)))))
       (.on page "pageerror" (fn [e] (swap! errors conj (str e))))
-      (js-await [_ (.goto page (str base url) #js {:waitUntil "networkidle"})]
-        (js-await [_ (.waitForSelector page ".reveal .slides section"
-                                       #js {:state "attached" :timeout 10000})]
-          (js-await [_ (.waitForTimeout page (or settle 1000))]
-            (js-await [results (js/Promise.all
-                                (into-array
-                                 (map #(probe-promise page url %) probes)))]
-              (js-await [_ (.close page)]
-                (conj (vec results)
-                      {:ok? (empty? @errors)
-                       :name (str url " — the console stayed clean")
-                       :detail (str/join " | " (take 3 @errors))})))))))))
+      (js-await [_ (.addInitScript page perf-init)]
+        (js-await [_ (if throttle (throttle! ctx page throttle) (js/Promise.resolve nil))]
+          (js-await [_ (.goto page (str base url) #js {:waitUntil "networkidle"})]
+            (js-await [_ (.waitForSelector page ".reveal .slides section"
+                                           #js {:state "attached" :timeout 30000})]
+              ;; The fit gate is a build check, not something a visitor should
+              ;; download, so a prerendered page does not carry plato.fit. The
+              ;; probes still need it: inject the same bundle the shell has.
+              (js-await [has-fit? (.evaluate page "typeof plato!=='undefined'&&!!plato.fit")]
+                (js-await [_ (if has-fit?
+                               (js/Promise.resolve nil)
+                               (.addScriptTag page #js {:url (str base "/vendor/plato-fit/main.js")}))]
+                  (js-await [_ (.waitForTimeout page (or settle 1000))]
+                    (js-await [results (js/Promise.all
+                                        (into-array
+                                         (map #(probe-promise page url %) probes)))]
+                      (js-await [_ (.close page)]
+                        (conj (vec results)
+                              {:ok? (empty? @errors)
+                               :name (str url " — the console stayed clean")
+                               :detail (str/join " | " (take 3 @errors))})))))))))))))
+
+(defn scenarios-for
+  "The scenarios that apply to `target` (:shell or :site). A scenario without
+   a :target applies to both."
+  [target]
+  (filter #(contains? #{:both target} (:target % :both)) scenarios))
 
 (defn ^:async -main [& _]
-  (let [root (or (first (drop 2 (.-argv js/process))) "public")
+  (let [[root target] (drop 2 (.-argv js/process))
+        root (or root "public")
+        target (keyword (or target "shell"))
         port 8099
         ^js server (serve root port)
         base (str "http://127.0.0.1:" port)]
+    (println (str "driving " root " as " (name target)))
     (js-await [^js browser (.launch pw/chromium)]
       (js-await [ctx (.newContext browser #js {:viewport #js {:width 1280 :height 800}})]
         (js-await [results (js/Promise.all
-                            (into-array (map #(run-scenario ctx base %) scenarios)))]
+                            (into-array (map #(run-scenario ctx base %)
+                                             (scenarios-for target))))]
           (js-await [_ (.close browser)]
             (let [flat (vec (mapcat identity results))
                   failed (remove :ok? flat)]

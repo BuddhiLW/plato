@@ -44,12 +44,20 @@
                            :entry     "/index.html"}
                     :acme {:shadow/id :acme
                            :http-port 8086
-                           :entry     "/acme.html"}}
+                           :entry     "/acme.html"}
+                    ;; The islands a prerendered page links. dist/site itself
+                    ;; is driven from test/site/hive-cljs.edn.
+                    :scene {:shadow/id :scene
+                            :http-port 8087
+                            :entry     "/index.html"}}
 
  :hive.cljs/e2e
  {:browser    :chromium
   :headless   true
   :timeout-ms 20000
+  ;; The prerendered site (dist/site) is driven by test/site/hive-cljs.edn,
+  ;; a :browser-toolchain manifest: a page with no shadow runtime attached
+  ;; cannot answer the runtime vocabulary this manifest's toolchain speaks.
   :scenarios
   [;; ── fit ────────────────────────────────────────────────────────────────
    ;; Reveal lays a deck out in a FIXED box (960x700 here) and CSS-scales that

@@ -1,0 +1,64 @@
+;; hive-cljs manifest for the PRERENDERED site, dist/site.
+;;
+;; Why a second manifest: the root hive-cljs.edn runs the :shadow-cljs
+;; toolchain, whose runtime vocabulary (:eval-cljs and, as it turns out, the
+;; JavaScript steps too) evaluates through the shadow runtime attached to a
+;; build. The shipped site has no such runtime — its only ClojureScript is two
+;; release-built islands — so its scenarios need the :browser toolchain, and a
+;; toolchain is a property of a manifest, not of a build. hive-cljs finds this
+;; file by walking up from here:
+;;
+;;   code {command: "cljs e2e run", directory: "<plato>/test/site", tags: "site"}
+;;
+;; The tree under test is what `bb build` wrote, served by shadow's second
+;; dev-http root (shadow-cljs.edn :dev-http 8087 -> dist/site). Start the
+;; server first; the suite does not.
+;;
+;; Same canonical-harness rule as the root manifest: test/plato/e2e.cljs is
+;; what CI runs over dist/site, including the throttled paint budget. What
+;; lives only here is the authoring loop.
+{:hive.cljs/toolchain :browser
+
+ :hive.cljs/builds {:site {:http-port 8087
+                           :command ["bb" "site"]}}
+
+ :hive.cljs/e2e
+ {:base-url   "http://localhost:8087"
+  :browser    :chromium
+  :headless   true
+  :timeout-ms 30000
+  :scenarios
+  [{:id    :site-prerendered
+    :tags  [:site :smoke]
+    :doc   "The shipped page is HTML first: the served bytes have slides before
+            any script, no application bundle loads, and a scene hydrates the
+            moment its slide is on screen."
+    :steps [[:goto "/index.html"]
+            [:wait-for ".reveal .slides section.present"]
+            [:expect-js "fetch(location.pathname).then(function(r){return r.text();}).then(function(h){return h.indexOf('<section') < h.indexOf('<script');})"]
+            [:expect-js "Array.from(document.scripts).map(function(s){return s.src;}).filter(Boolean).every(function(s){return /\\/vendor\\//.test(s);})"]
+            [:goto "/index.html#/animation"]
+            [:wait-for-js "document.querySelectorAll('section#animation .plato-transport').length === 1"]]}
+
+   {:id    :site-budget
+    :tags  [:site :perf]
+    :doc   "What the shipped page costs, as the browser measures it on an
+            unthrottled localhost. The first two steps REPORT (DOMContentLoaded
+            in ms, script bytes on the wire); the last two are the budget."
+    :steps [[:goto "/index.html"]
+            [:wait-for ".reveal .slides section.present"]
+            [:expect-js "Math.round(performance.getEntriesByType('navigation')[0].domContentLoadedEventEnd)"]
+            [:expect-js "performance.getEntriesByType('resource').filter(function(r){return r.initiatorType==='script';}).reduce(function(a,r){return a+(r.transferSize||r.encodedBodySize||0);},0)"]
+            [:expect-js "performance.getEntriesByType('navigation')[0].domContentLoadedEventEnd < 2500"]
+            [:expect-js "performance.getEntriesByType('resource').filter(function(r){return r.initiatorType==='script';}).reduce(function(a,r){return a+(r.transferSize||r.encodedBodySize||0);},0) < 400000"]]}
+
+   {:id    :site-acme-math
+    :tags  [:site]
+    :doc   "Math is read off the deck: Acme declared it and carries the plugin;
+            the site deck did not and must not phone home for it."
+    :steps [[:goto "/acme.html"]
+            [:wait-for ".reveal .slides section"]
+            [:expect-js "!!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"]
+            [:goto "/index.html"]
+            [:wait-for ".reveal .slides section"]
+            [:expect-js "!Array.from(document.scripts).find(function(s){return /plugin\\/math\\.js/.test(s.src);})"]]}]}}
