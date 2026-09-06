@@ -65,6 +65,13 @@
              (let [p (smooth t)]                  ; so last-writer-wins yields absolute position.
                {:translate [(- (lerp fx tx p) bx) (- (lerp fy ty p) by)]})))
 
+(defrecord Connect [from-px to-px from-px' to-px']   ; SVG px endpoints, before and after
+  p/ITween (-sample [_ t]
+             (let [p (smooth t)
+                   [fx fy] from-px [tx ty] to-px
+                   [fx' fy'] from-px' [tx' ty'] to-px']
+               {:endpoints [(lerp fx fx' p) (lerp fy fy' p) (lerp tx tx' p) (lerp ty ty' p)]})))
+
 (defrecord Emphasize [base pulse max-scale]       ; base/pulse = hex; pivot derived in -apply
   p/ITween (-sample [_ t]
              (let [a (there-and-back t)]
@@ -85,6 +92,7 @@
    :emphasize #{:fill :scale}
    :count-to  #{:text}
    :glide     #{:translate}
+   :connect   #{:endpoints}
    :morph     #{}})
 
 ;; ── constructor seam: descriptor + threaded start-state -> {:tween :writes} ──
@@ -92,6 +100,14 @@
 ;; :writes is the end-state this anim commits (nil = threads nothing). Opacity is
 ;; NOT threaded — the seed + the active span fully determine it.
 (defmulti build-span (fn [_ctx anim] (:anim anim)))
+
+(defmethod build-span :connect [{:keys [state]} anim]
+  (let [id   (:target anim)
+        f    (get-in state [id :from-px])                   ; current endpoints (threaded)
+        t    (get-in state [id :to-px])
+        f'   (let [{:keys [x y]} (geo/point (pget anim :from))] [x y])
+        t'   (let [{:keys [x y]} (geo/point (pget anim :to))] [x y])]
+    {:tween (->Connect f t f' t') :writes {:from-px f' :to-px t'}}))
 
 (defmethod build-span :appear [_ _] {:tween (->Appear) :writes nil})
 (defmethod build-span :vanish [_ _] {:tween (->Vanish) :writes nil})

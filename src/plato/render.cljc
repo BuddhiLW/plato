@@ -26,6 +26,21 @@
   "Static SVG hiccup for a scene node (dispatch on :node)."
   (fn [_g nd] (:node nd)))
 
+(defn- line-el
+  "A :line node: endpoints in world units, stroke from :stroke or :opts."
+  [_g nd]
+  (let [a (geo/point (:from nd))
+        b (geo/point (:to nd))
+        s (or (:stroke nd) {:color (get-in nd [:opts :color] :white)
+                             :width (get-in nd [:opts :width] 3)})]
+    [:line {:x1 (:x a) :y1 (:y a) :x2 (:x b) :y2 (:y b)
+            :stroke (color/hex (:color s :white))
+            :stroke-width (:width s 3)
+            :stroke-opacity (:opacity s 1)
+            :stroke-linecap "round"
+            :fill "none"}]))
+(defmethod node->hiccup :line   [g nd] (line-el g nd))
+
 (defn- layout-root-box [g]
   (some (fn [[k value]]
           (when (= "box" (name k)) value))
@@ -119,6 +134,7 @@
     :circle [(:cx a) (:cy a)]
     :rect   [(+ (:x a) (/ (:width a) 2.0)) (+ (:y a) (/ (:height a) 2.0))]
     :text   [(:x a) (:y a)]
+    :line   [(/ (+ (:x1 a) (:x2 a)) 2.0) (/ (+ (:y1 a) (:y2 a)) 2.0)]
     :image  [(+ (:x a) (/ (:width a) 2.0))
              (+ (:y a) (/ (:height a) 2.0))]
     [0 0]))
@@ -141,14 +157,15 @@
   {:pathLength 1 :stroke-dasharray 1 :stroke-dashoffset (- 1.0 reveal)})
 
 (defn- merge-paint
-  "Direct-value channels: opacity/fill/stroke, plus the draw reveal. `contains?`
-   (not truthiness) so opacity 0.0 still applies."
+  "Direct-value channels: opacity/fill/stroke, plus the draw reveal and a
+   line's endpoints. `contains?` (not truthiness) so opacity 0.0 still applies."
   [a attrs]
   (cond-> a
-    (contains? attrs :opacity) (assoc :opacity (:opacity attrs))
-    (contains? attrs :fill)    (assoc :fill    (:fill attrs))
-    (contains? attrs :stroke)  (assoc :stroke  (:stroke attrs))
-    (contains? attrs :draw)    (merge (draw-attrs (:draw attrs)))))
+    (contains? attrs :opacity)   (assoc :opacity (:opacity attrs))
+    (contains? attrs :fill)      (assoc :fill    (:fill attrs))
+    (contains? attrs :stroke)    (assoc :stroke  (:stroke attrs))
+    (contains? attrs :draw)      (merge (draw-attrs (:draw attrs)))
+    (contains? attrs :endpoints) (merge (zipmap [:x1 :y1 :x2 :y2] (:endpoints attrs)))))
 
 (defn- merge-transform [a attrs center]
   (let [tf (transform-str attrs center)]
