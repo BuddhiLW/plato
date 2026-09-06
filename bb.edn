@@ -20,5 +20,7 @@
            :task (build! "site")}
   build   {:doc "assets, bundles, site — the tree GitHub Pages publishes"
            :depends [assets bundles site]}
-  shell   {:doc "Release-build the Reagent dev shells under public/ (browser suite only)"
+  ;; Not `shell`: a task's name becomes a var in the tasks namespace, and that
+  ;; one is already babashka.process/shell, referred above.
+  shells  {:doc "Release-build the Reagent dev shells under public/ (browser suite only)"
            :task (shell "npx shadow-cljs release app acme")}}}

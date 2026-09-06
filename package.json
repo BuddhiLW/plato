@@ -13,7 +13,7 @@
     "dev": "bb assets && shadow-cljs watch app acme",
     "build": "bb build",
     "test": "clojure -M:test",
-    "e2e": "bb build && bb shell && shadow-cljs release e2e && npm run e2e:export && node target/e2e.js public shell && node target/e2e.js dist/site site",
+    "e2e": "bb build && bb shells && shadow-cljs release e2e && npm run e2e:export && node target/e2e.js public shell && node target/e2e.js dist/site site",
     "e2e:export": "clojure -M:cli build test/fixtures/shrink.edn -o public/e2e/shrink-export.html --asset-base ..",
     "check": "npm run test && npm run build",
     "fixtures": "node scripts/gen-fixtures.mjs",
