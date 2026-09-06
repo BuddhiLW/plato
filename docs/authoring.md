@@ -304,7 +304,13 @@ clojure -M:cli build --deck plato.acme.deck/model --out dist/acme-static.html
 
 `--assets <dir>` copies the `vendor/` and `css/` trees the page links from `<dir>`, which is what
 makes the export standalone — without it the page links assets it does not carry. `--math` opts into
-the math plugin, off by default because the vendored build fetches KaTeX from a CDN.
+the math plugin, which renders with the KaTeX copy under `vendor/katex` rather than a CDN; it is off
+by default because that copy is the largest script a page can carry, and a page without a formula
+should not carry it. A deck that declares `{:math? true}` gets it without the flag, in the browser
+shell too — the flag and the key are read by one function, so the two render targets cannot
+disagree. `--live-scenes` links the scene island so Desargues scenes play and scrub in the exported
+page instead of showing their final frame. `--description` sets the page's
+`<meta name="description">`; a deck's `:description` does the same without it.
 
 `--deck` loads a deck from a var, so a Clojure-authored deck exports the same way a Markdown one does.
 It needs the deck’s sources on the classpath, which the JVM (`clojure -M:cli`) and `cljw -cp` provide;
@@ -318,6 +324,35 @@ README for what still does not work on the native binary.
 
 In a static export a Desargues scene renders as its **final frame** — the same scene is a scrub-able
 player in the browser. Both projections come from one `plato.render/scene-svg`.
+
+### The published site
+
+`npm run build` is `bb build`, and it is three steps you can also run alone:
+
+~~~bash
+bb assets    # vendors reveal.js and KaTeX from node_modules into public/vendor
+bb bundles   # shadow-cljs release builds of the islands: plato-fit, plato-scene, plato-highlight
+bb site      # prerenders the two site decks into dist/site
+~~~
+
+`dist/site` is the tree GitHub Pages publishes: `index.html` and `acme.html` with their slides in
+the HTML, and `vendor/`, `css/`, `fonts/` and `assets/` beside them. Each page is built with
+`--live-scenes`, so its scenes play, and Acme carries math because its deck declares `:math?`. The
+renderer is `scripts/build.clj`, a namespace the CLI's own runtimes run: bb picks `cljw` when it is
+on the PATH and the JVM otherwise, and the page is byte-identical either way.
+
+The site has its own hive-cljs manifest, `test/site/hive-cljs.edn`, because a prerendered page has
+no shadow runtime for the root manifest's toolchain to speak to. It runs under the `:browser`
+toolchain against shadow's second dev-http root, which serves `dist/site` on port 8087:
+
+~~~bash
+npx shadow-cljs watch app     # serves public/ on 8086 and dist/site on 8087
+bb build
+# then, from hive: code {command: "cljs e2e run", directory: "<plato>/test/site", tags: "site"}
+~~~
+
+What CI gates on is still `npm run e2e`, which drives `dist/site` as well as the shell and prints
+the paint numbers it measures under mobile throttling; the manifest is the authoring loop.
 
 ## 7. Fit — slides that do not fit fail the build
 

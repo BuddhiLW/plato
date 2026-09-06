@@ -38,8 +38,8 @@ What ships is not the dev shell. `npm run build` (`bb build`) prerenders both de
 the same exporter the CLI uses — on [ClojureWasm](https://github.com/clojurewasm) when `cljw`
 is installed, on the JVM otherwise — and writes `dist/site/`: HTML first, then Reveal, its
 plugins, and two small islands (the scene player, and the fit gate only for a deck that
-declares `:shrink`). No React, no application bundle, no request to a font or math CDN
-unless the deck asked for math. The browser suite drives that tree as well as the shell,
+declares `:shrink`). No React, no application bundle, and no request leaves the page: the
+fonts and KaTeX are served beside it. The browser suite drives that tree as well as the shell,
 under mobile throttling, and prints the paint numbers it gates on. Full check: `npm run check`.
 
 The demo’s media are fixtures generated into `public/assets/acme/`; `npm run fixtures` regenerates them byte-for-byte from `scripts/gen-fixtures.mjs` (needs ffmpeg, ImageMagick and rsvg-convert).
@@ -261,9 +261,10 @@ plato theme theme/acme-print.tokens.edn -o public/css/acme-print-theme.css
 ~~~
 
 `--assets <dir>` copies the `vendor/` and `css/` trees the page links, which is what makes the
-output actually standalone. `--math` opts into the math plugin; it is off by default because the
-vendored build fetches KaTeX from a CDN, and a page that never asked for math should not phone
-home — a deck that declares `{:math? true}` gets it without the flag, in the browser shell too.
+output actually standalone. `--math` opts into the math plugin, which renders with the KaTeX copy
+under `vendor/katex` rather than a CDN; it is off by default because that copy is the largest
+script a page can carry, and a page without a formula should not carry it — a deck that declares
+`{:math? true}` gets it without the flag, in the browser shell too.
 `--live-scenes` links the scene island so Desargues scenes play and scrub in the exported page
 instead of showing their final frame; `--description` sets the page's meta description. From
 the REPL the same thing is a function call:
