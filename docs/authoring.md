@@ -336,7 +336,7 @@ bb site      # prerenders the two site decks into dist/site
 ~~~
 
 `dist/site` is the tree GitHub Pages publishes: `index.html` and `acme.html` with their slides in
-the HTML, and `vendor/`, `css/`, `fonts/` and `assets/` beside them. Each page is built with
+the HTML, and `vendor/`, `css/` (with its fonts) and `assets/` beside them. Each page is built with
 `--live-scenes`, so its scenes play, and Acme carries math because its deck declares `:math?`. The
 renderer is `scripts/build.clj`, a namespace the CLI's own runtimes run: bb picks `cljw` when it is
 on the PATH and the JVM otherwise, and the page is byte-identical either way.

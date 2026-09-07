@@ -60,7 +60,7 @@
 (defn- strip-font-imports
   "The Reveal theme @imports its two families from Google Fonts, a chained,
    render-blocking request on every visit. plato self-hosts those faces from
-   public/fonts through css/plato.css, so the import goes."
+   public/css/fonts through css/plato.css, so the import goes."
   [css]
   (str/replace css #"@import\s+(?:url\()?[\"']?https://fonts\.googleapis\.com[^;]*;\s*" ""))
 
@@ -74,9 +74,28 @@
       (doseq [^java.io.File f (reverse (tree-seq dir? #(seq (.listFiles ^java.io.File %)) root))]
         (.delete f)))))
 
+(def hyperframes-files
+  "What a `plato hyperframes` project links, from the @hyperframes packages:
+   [npm path, public path]. The runtime the composition carries, and the
+   player and slideshow elements its presenter page loads. Vendored under
+   public/hyperframes rather than public/vendor so the Reveal site, which
+   copies vendor/ whole, does not ship them."
+  [["node_modules/@hyperframes/core/dist/hyperframe.runtime.iife.js"
+    "public/hyperframes/hyperframe.runtime.iife.js"]
+   ["node_modules/@hyperframes/player/dist/hyperframes-player.global.js"
+    "public/hyperframes/hyperframes-player.global.js"]
+   ["node_modules/@hyperframes/player/dist/slideshow/hyperframes-slideshow.global.js"
+    "public/hyperframes/hyperframes-slideshow.global.js"]])
+
 (defn assets! []
   (doseq [[from to] vendor-files]
     (copy-file! (str reveal-dist "/" from) (str "public/vendor/" to)))
+  (doseq [[from to] hyperframes-files]
+    (if (.exists (io/file from))
+      (do (copy-file! from to)
+          (println (str "vendored " from " into " to)))
+      (println (str "no " from " — `plato hyperframes` pages will link a file"
+                    " that is not there"))))
   (let [theme "public/vendor/theme/night.css"]
     (cli/write-file! theme (strip-font-imports (slurp (str reveal-dist "/theme/night.css")))))
   (println (str "vendored " (count vendor-files) " reveal.js files into public/vendor"))
@@ -115,7 +134,7 @@
   ;; A fresh tree every time: a file that stopped being linked must not ship
   ;; from a previous build's copy.
   (delete-tree! out-dir)
-  (doseq [root ["vendor" "css" "fonts" "assets"]]
+  (doseq [root ["vendor" "css" "assets"]]
     (cli/copy-tree! (str "public/" root) (str out-dir "/" root)))
   ;; plato.css @imports the generated token sheet, which in the dev tree keeps
   ;; the two files separately editable. On the shipped page that import is one

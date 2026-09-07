@@ -151,6 +151,20 @@
     (remove-watch (player/state-atom player) watch-key)
     (player/destroy! player)))
 
+(defn ^:export seekable
+  "Mount the scene `el` carries in its `data-plato-scene` attribute, with no
+   transport and no autoplay, for a host that owns the clock — a HyperFrames
+   page seeks it frame by frame. Returns a JS object {seek(seconds), duration}
+   over the same player `mount!` drives, or nil when `el` has already been
+   read. The attribute is removed once read, as `hydrate` does."
+  [el]
+  (when-let [edn (.getAttribute el "data-plato-scene")]
+    (.removeAttribute el "data-plato-scene")
+    (let [scene (assoc (reader/read-string edn) :controls? false :autoplay? false)
+          {:keys [player]} (mount! el scene)]
+      #js {:seek (fn [t] (p/-seek! player t) nil)
+           :duration (:duration @(player/state-atom player))})))
+
 (defn ^:export hydrate
   "Mount every `[data-plato-scene]` element on the page, each the first time
    it is on screen. The attribute holds the scene value as EDN, written by the

@@ -31,6 +31,8 @@
     "reveal.js": "6.0.1"
   },
   "devDependencies": {
+    "@hyperframes/core": "^0.8.30",
+    "@hyperframes/player": "^0.8.30",
     "playwright": "^1.62.1",
     "shadow-cljs": "3.4.12"
   }

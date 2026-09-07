@@ -14,6 +14,7 @@
             [plato.data]
             [plato.deck :as deck]
             [plato.html :as html]
+            [plato.hyperframes :as hyperframes]
             [plato.markdown]
             [plato.org]
             [plato.source :as source]
@@ -30,6 +31,9 @@
     "  plato build <source.md|source.org> [options]"
     "  plato build --deck <ns/var> --out <path> [options]"
     "  plato spec  <source.md|source.org> [options]"
+    "  plato hyperframes <source.md|source.org> [options]"
+    "  plato hyperframes --deck <ns/var> --out <dir> [options]"
+    "  plato serve <source.md|source.org> [options]"
     "  plato theme <tokens.edn> [options]"
     "  plato help | version"
     ""
@@ -57,6 +61,30 @@
     "      --theme <name>      theme name carried to the renderer"
     "      --print             write the JSON to stdout instead of a file"
     ""
+    "hyperframes options — emit a HyperFrames slideshow project, for"
+    "  `hyperframes present`, `snapshot` and `render` (github.com/heygen-com/hyperframes)"
+    "  -o, --out <dir>         project directory, receives index.html"
+    "                          (default: the source stem with a -hyperframes suffix)"
+    "      --deck <ns/var>     build the deck a var holds instead of a source file"
+    "      --title <string>    page title (default: the deck title)"
+    "      --description <s>   page meta description (default: the deck's :description)"
+    "      --theme-css <path>  extra stylesheet to link, as authored"
+    "      --tokens <path>     token source: generates a theme CSS beside the page and links it"
+    "      --asset-base <path> prefix for css/ and vendor/ links (default: .)"
+    "      --assets <dir>      copy css/, assets/, the scene bundle and the HyperFrames"
+    "                          runtime from <dir> into the project"
+    "      --print             write the page to stdout instead of a file"
+    ""
+    "serve options — a dev server (JVM): the deck rendered from its source on every"
+    "  request, and the page reloads when the source or its theme inputs change"
+    "      --port <n>          port to listen on (default: 8090)"
+    "      --assets <dir>      directory the page's vendor/, css/ and assets/ links resolve in"
+    "                          (default: public)"
+    "      --hyperframes       serve the HyperFrames project instead: index.html is the"
+    "                          composition and present.html the presenter"
+    "      --deck, --title, --description, --theme, --theme-css, --tokens, --math,"
+    "      --fit, --live-scenes as for build"
+    ""
     "theme options"
     "  -o, --out <path>        output CSS (default: the source with a .css suffix)"
     "      --json <path>       also write the language-neutral manifest"
@@ -79,6 +107,8 @@
    "--math" [:math? 0]
    "--fit" [:fit? 0]
    "--live-scenes" [:live-scenes? 0]
+   "--port" [:port 1]
+   "--hyperframes" [:hyperframes? 0]
    "--json" [:json 1]
    "--cljc" [:cljc 1]
    "--sty" [:sty 1]
@@ -87,9 +117,17 @@
 
 (def commands
   "Bare words that select what the CLI does."
-  {"build" :build "theme" :theme "spec" :spec
+  {"build" :build "theme" :theme "spec" :spec "hyperframes" :hyperframes "serve" :serve
    "help" :help "-h" :help "--help" :help
    "version" :version "-v" :version "--version" :version})
+
+(def deck-commands
+  "Commands that render a deck, from a source file or a --deck var."
+  #{:build :hyperframes :serve})
+
+(def file-commands
+  "Deck commands that write files, so a --deck build must say where."
+  #{:build :hyperframes})
 
 (defn parse-args
   "argv -> {:command keyword :input string :opts map} or {:error string}."
@@ -105,9 +143,9 @@
           (nil? command) (assoc acc :command :help)
           (some? extra) {:error (str "Unexpected argument: " extra)}
           (nil? kind) {:error (str "Unknown command: " command)}
-          (and (= :build kind) (nil? input) (nil? (get-in acc [:opts :deck])))
-          {:error "Command build needs a source path or --deck <ns/var>"}
-          (and (= :build kind) (get-in acc [:opts :deck]) (nil? (get-in acc [:opts :out]))
+          (and (deck-commands kind) (nil? input) (nil? (get-in acc [:opts :deck])))
+          {:error (str "Command " command " needs a source path or --deck <ns/var>")}
+          (and (file-commands kind) (get-in acc [:opts :deck]) (nil? (get-in acc [:opts :out]))
                (not (get-in acc [:opts :print?])))
           {:error "--deck needs --out <path> or --print"}
           (and (= :theme kind) (nil? input))
@@ -158,6 +196,44 @@
    them it links a vendor/ and css/ tree it does not carry."
   ["vendor" "css"])
 
+(defn- source-model
+  "The deck a job renders: `model` when given, else the source text parsed by
+   the front end its path's extension names."
+  [{:keys [input text model]}]
+  (or model
+      (let [kind (source/kind input)]
+        (when (nil? kind)
+          (throw (ex-info (str "Unsupported source extension: " input)
+                          {:input input
+                           :known (sort (keys (source/known-extensions)))})))
+        (source/->deck kind text))))
+
+(defn- theme-sheets
+  "[theme-tokens sheets]: the tokens a job generates a theme from, if any, and
+   every stylesheet the page links — the authored --theme-css and the
+   generated sheet's file name."
+  [{:keys [opts tokens-text token-maps]}]
+  (let [theme-tokens (cond
+                       (seq token-maps) (tokens/assert-tokens! (tokens/compose token-maps))
+                       tokens-text (tokens/assert-tokens!
+                                    (tokens/parse (:tokens opts) tokens-text)))
+        sheet (when theme-tokens (theme-css-name (:tokens opts)))]
+    [theme-tokens (vec (remove nil? [(:theme-css opts) sheet]))]))
+
+(defn- page-opts
+  "The render options both deck jobs read off the CLI opts. :after-slides and
+   :after-player are hiccup a caller (the dev server) appends to a page."
+  [opts sheets theme-tokens]
+  (cond-> {:stylesheets sheets}
+    (:title opts) (assoc :title (:title opts))
+    (:description opts) (assoc :description (:description opts))
+    (:asset-base opts) (assoc :asset-base (:asset-base opts))
+    (:after-slides opts) (assoc :after-slides (:after-slides opts))
+    (:after-player opts) (assoc :after-player (:after-player opts))
+    (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))
+    (assoc :theme (or (:theme opts)
+                      (get-in theme-tokens [:meta :reveal-theme])))))
+
 (defn build-job
   "Pure build. Takes the already-read sources; returns
    {:files [{:path :content}] :copies [{:from :to}] :stdout string-or-nil
@@ -165,32 +241,17 @@
 
    job: {:input path :text source-text :model deck :opts {...} :tokens-text edn-string}
    `:model` wins over `:text`; otherwise the source kind comes from `:input`."
-  [{:keys [input text model opts tokens-text token-maps]}]
-  (let [kind (when-not model (source/kind input))
-        _ (when (and (not model) (nil? kind))
-            (throw (ex-info (str "Unsupported source extension: " input)
-                            {:input input
-                             :known (sort (keys (source/known-extensions)))})))
-        model (or model (source/->deck kind text))
+  [{:keys [input opts] :as job}]
+  (let [model (source-model job)
         out (or (:out opts) (str (strip-extension input) ".html"))
-        theme-tokens (cond
-                       (seq token-maps) (tokens/assert-tokens! (tokens/compose token-maps))
-                       tokens-text (tokens/assert-tokens!
-                                    (tokens/parse (:tokens opts) tokens-text)))
-        sheet (when theme-tokens (theme-css-name (:tokens opts)))
-        sheets (vec (remove nil? [(:theme-css opts) sheet]))
+        [theme-tokens sheets] (theme-sheets job)
+        sheet (last sheets)
         page (html/deck->html
               model
-              (cond-> {:stylesheets sheets}
-                (:title opts) (assoc :title (:title opts))
-                (:description opts) (assoc :description (:description opts))
+              (cond-> (page-opts opts sheets theme-tokens)
                 (:math? opts) (assoc :math? true)
                 (:fit? opts) (assoc :fit? true)
-                (:live-scenes? opts) (assoc :live-scenes? true)
-                (:asset-base opts) (assoc :asset-base (:asset-base opts))
-                (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))
-                (assoc :theme (or (:theme opts)
-                                  (get-in theme-tokens [:meta :reveal-theme])))))
+                (:live-scenes? opts) (assoc :live-scenes? true)))
         files (cond-> []
                 theme-tokens (conj {:path (sibling out sheet)
                                     :content (tokens/css theme-tokens (:tokens opts))})
@@ -210,6 +271,55 @@
                        (str "wrote " path " (" (count content) " bytes"
                             (when (= path out)
                               (str ", " (count (deck/leaf-slides model)) " slides"))
+                            ")"))
+                     files)
+                (map (fn [{:keys [from to]}] (str "copied " from " -> " to))
+                     copies)))}))
+
+(def hyperframes-asset-roots
+  "What `--assets <dir>` copies into a HyperFrames project: the plato sheets
+   with their faces, the deck's media, the scene bundle the page seeks
+   Desargues scenes through, and the HyperFrames runtime `bb assets` vendors.
+   Reveal and its plugins stay out — nothing in the project loads them."
+  ["css" "assets" "vendor/plato-scene" "hyperframes"])
+
+(defn hyperframes-job
+  "Pure HyperFrames projection: the same {:files :copies :stdout :deck :summary}
+   shape as build-job, writing the deck as `<out>/index.html`, the entry point
+   of a HyperFrames project, and `<out>/present.html`, a presenter page over
+   it that any static server serves.
+
+   job: {:input path :text source-text :model deck :opts {...} :token-maps [...]}
+   `:model` wins over `:text`; otherwise the source kind comes from `:input`."
+  [{:keys [input opts] :as job}]
+  (let [model (source-model job)
+        dir (or (:out opts) (str (strip-extension input) "-hyperframes"))
+        out (str dir "/index.html")
+        [theme-tokens sheets] (theme-sheets job)
+        sheet (last sheets)
+        render-opts (page-opts opts sheets theme-tokens)
+        page (hyperframes/deck->composition model render-opts)
+        presenter (hyperframes/deck->presenter model render-opts)
+        files (cond-> []
+                theme-tokens (conj {:path (sibling out sheet)
+                                    :content (tokens/css theme-tokens (:tokens opts))})
+                (not (:print? opts)) (conj {:path out :content page}
+                                           {:path (str dir "/present.html") :content presenter}))
+        copies (when (and (:assets opts) (not (:print? opts)))
+                 (mapv (fn [root] {:from (str (:assets opts) "/" root)
+                                   :to (str dir "/" root)})
+                       hyperframes-asset-roots))]
+    {:files files
+     :copies (vec copies)
+     :stdout (when (:print? opts) page)
+     :deck model
+     :summary (str/join
+               "\n"
+               (concat
+                (map (fn [{:keys [path content]}]
+                       (str "wrote " path " (" (count content) " bytes"
+                            (when (= path out)
+                              (str ", " (count (deck/leaf-slides model)) " scenes"))
                             ")"))
                      files)
                 (map (fn [{:keys [from to]}] (str "copied " from " -> " to))
@@ -371,16 +481,28 @@
              (when-let [^java.io.File parent (.getParentFile dest)] (.mkdirs parent))
              (io/copy f dest)))))))
 
+(defn deck-job
+  "Read everything a deck job needs: the source text at `input` (or the deck
+   the --deck var holds) and the theme chain --tokens names. The one I/O step
+   before build-job and hyperframes-job, so the dev server can repeat it on
+   every request."
+  [input opts]
+  {:input input
+   :text (when-not (:deck opts) (read-source input))
+   :model (when (:deck opts) (deck-from-var (:deck opts)))
+   :opts opts
+   :token-maps (when (:tokens opts)
+                 (token-chain (:tokens opts)))})
+
 (defn- run-job
   "Read the sources a parsed command needs, run the pure job, write its files."
-  [{:keys [command input opts]}]
+  [{:keys [command input opts] :as parsed}]
   (let [job (case command
-              :build (build-job {:input input
-                                 :text (when-not (:deck opts) (read-source input))
-                                 :model (when (:deck opts) (deck-from-var (:deck opts)))
-                                 :opts opts
-                                 :token-maps (when (:tokens opts)
-                                               (token-chain (:tokens opts)))})
+              :build (build-job (deck-job input opts))
+              :hyperframes (hyperframes-job (deck-job input opts))
+              :serve #?(:clj ((requiring-resolve 'plato.serve/serve!) parsed)
+                        :default (throw (ex-info "serve needs the JVM: this runtime has no HTTP server"
+                                                 {:command :serve})))
               :spec (spec-job {:input input :text (read-source input) :opts opts})
               :theme (theme-job {:input input :token-maps (token-chain input) :opts opts}))]
     (doseq [{:keys [path content]} (:files job)]

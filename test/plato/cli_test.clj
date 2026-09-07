@@ -24,6 +24,36 @@
   (is (= {:print? true} (:opts (cli/parse-args ["build" "a.md" "--print"]))))
   (is (= :theme (:command (cli/parse-args ["theme" "t.edn"])))))
 
+(deftest parse-args-reads-the-hyperframes-command
+  (is (= {:command :hyperframes :input "a.md" :opts {:out "deck" :assets "public"}}
+         (cli/parse-args ["hyperframes" "a.md" "-o" "deck" "--assets" "public"])))
+  (is (str/includes? (:error (cli/parse-args ["hyperframes"])) "needs a source path"))
+  (is (str/includes? (:error (cli/parse-args ["hyperframes" "--deck" "a/b"])) "--deck needs --out")))
+
+(deftest hyperframes-job-writes-a-project
+  (let [job (cli/hyperframes-job {:input "talk/smoke.md" :text markdown-source :opts {}})
+        [page presenter] (:files job)]
+    (is (= "talk/smoke-hyperframes/index.html" (:path page)))
+    (is (str/includes? (:content page) "application/hyperframes-slideshow+json"))
+    (is (str/includes? (:content page) "data-composition-id=\"one\""))
+    (is (= "talk/smoke-hyperframes/present.html" (:path presenter)))
+    (is (str/includes? (:content presenter) "<hyperframes-player interactive=\"\" src=\"index.html\">"))
+    (is (str/includes? (:summary job) "2 scenes"))
+    (is (= [] (:copies job))))
+  (testing "--out names the project directory, --assets fills it"
+    (let [job (cli/hyperframes-job {:input "smoke.md" :text markdown-source
+                                    :opts {:out "out/deck" :assets "public"}})]
+      (is (= "out/deck/index.html" (:path (first (:files job)))))
+      (is (= [{:from "public/css" :to "out/deck/css"}
+              {:from "public/assets" :to "out/deck/assets"}
+              {:from "public/vendor/plato-scene" :to "out/deck/vendor/plato-scene"}
+              {:from "public/hyperframes" :to "out/deck/hyperframes"}]
+             (:copies job)))))
+  (testing "--print hands the page back instead of a file"
+    (let [job (cli/hyperframes-job {:input "smoke.md" :text markdown-source :opts {:print? true}})]
+      (is (empty? (:files job)))
+      (is (str/starts-with? (:stdout job) "<!doctype html>")))))
+
 (deftest parse-args-reports-bad-input
   (is (str/includes? (:error (cli/parse-args ["frobnicate" "a.md"])) "Unknown command"))
   (is (str/includes? (:error (cli/parse-args ["build"])) "needs a source path"))

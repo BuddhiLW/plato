@@ -279,6 +279,62 @@ the REPL the same thing is a function call:
 
 `plato.snapshot/write-svg!` renders a Desargues scene’s final state to a standalone SVG.
 
+## Live preview while writing
+
+`plato serve` renders the deck from its source on every request and reloads the browser when the
+source, its token file or its theme sheet changes. Reveal keeps the slide in the URL, so the page
+comes back where you were:
+
+~~~bash
+plato serve talk.md --tokens theme/acme.tokens.edn        # http://localhost:8090/
+plato serve talk.org --hyperframes --port 3005            # http://localhost:3005/present.html
+plato serve --deck plato.example.deck/model               # a var, re-read on every request
+~~~
+
+`--assets <dir>` names the tree the page’s `vendor/`, `css/` and `assets/` links resolve in
+(default `public`, this repo’s own). A source that does not build shows the error in the page
+and keeps listening, so fixing it brings the deck back. JVM only: the native binary has no HTTP
+server.
+
+## Export to HyperFrames
+
+[HyperFrames](https://github.com/heygen-com/hyperframes) turns HTML with `data-*` timing and
+seekable animations into a navigable deck, per-slide stills and a deterministic MP4. A plato deck
+exports as a HyperFrames project, a third render target beside the browser shell and the Reveal
+page:
+
+~~~bash
+plato hyperframes docs/acme.md -o dist/acme-hf --assets public --theme-css ./css/acme-theme.css
+plato hyperframes --deck plato.example.deck/model -o dist/plato-hf --assets public
+
+npx hyperframes lint dist/acme-hf            # the static contract, 0 errors expected
+npx hyperframes snapshot dist/acme-hf --at 7 # a still at seven seconds
+npx hyperframes render dist/acme-hf          # the whole deck, linearly, as MP4
+python3 -m http.server 8000 -d dist/acme-hf  # then open /present.html
+~~~
+
+`index.html` is the composition: one root composition `main` whose scenes are the deck’s leaf
+slides, timed end to end. A slide holds five seconds, plus a second per fragment, plus the length
+of any Desargues scene it carries; a slide’s `:seconds` option overrides that. The slideshow
+island beside it lists the scenes with their speaker notes and hold-points, so `present.html`,
+a presenter page written beside the composition over the vendored HyperFrames player, walks the
+deck the way Reveal does: a slide is entered with nothing revealed, Next reveals one fragment,
+and a scene is entered on its final frame.
+
+The page carries no GSAP. Each scene registers its own timeline on `window.__timelines`, the
+duck-typed object the HyperFrames runtime seeks; it reveals the scene’s fragments and seeks its
+Desargues scenes through the same `plato.scene-island` the Reveal export loads. A markdown
+slide is expanded through the markdown front end at export, since no Reveal plugin runs in the
+page. `--assets <dir>` copies `css/`, `assets/`, the scene bundle and `hyperframes/`, the
+runtime and player `bb assets` vendors from the `@hyperframes/core` and `@hyperframes/player`
+packages; a page links them beside itself and never phones a CDN.
+
+Two things to know. A slide id HyperFrames reserves (`main`, or one containing `caption` or
+`ambient`) becomes `s-<hash>` in the project. And `npx hyperframes present <dir>` is HyperFrames’
+own presenter over the same `index.html`; in this repo’s browser suite it never bound the deck,
+because its element initialises before its children are parsed, so `present.html` is the page
+the suite drives. The suite lives in `test/hyperframes/hive-cljs.edn`.
+
 ## Layers
 
 | Layer | Namespace | Runtime |

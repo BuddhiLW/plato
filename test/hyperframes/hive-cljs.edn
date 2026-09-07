@@ -1,0 +1,70 @@
+;; hive-cljs manifest for a deck EXPORTED TO HYPERFRAMES and served by the
+;; HyperFrames presenter.
+;;
+;; The pages under test are what `plato hyperframes` writes: index.html, the
+;; composition, and present.html, the presenter page plato writes beside it,
+;; <hyperframes-slideshow> around an <hyperframes-player> iframe over the
+;; vendored HyperFrames player. `plato serve --hyperframes` serves both from
+;; the deck, or export with the :present build below and use any static
+;; server. Start one first; the suite does not:
+;;
+;;   clojure -M:cli serve --deck plato.example.deck/model --hyperframes --port 3005
+;;   (or: clojure -M:cli hyperframes --deck plato.example.deck/model -o target/hyperframes/site --assets public
+;;        python3 -m http.server 3005 --directory target/hyperframes/site)
+;;   code {command: "cljs e2e run", directory: "<plato>/test/hyperframes", tags: "hyperframes"}
+;;
+;; Same toolchain rule as test/site: the page carries no shadow runtime, so
+;; the probes are JavaScript over the DOM. Every probe reaches into the
+;; player's iframe, where the composition lives — the same lookup spelled
+;; out in each step, because a step is one expression.
+{:hive.cljs/toolchain :browser
+
+ :hive.cljs/builds {:present {:http-port 3005
+                              :command ["clojure" "-M:cli" "hyperframes"
+                                        "--deck" "plato.example.deck/model"
+                                        "-o" "target/hyperframes/site"
+                                        "--assets" "public"]}}
+
+ :hive.cljs/e2e
+ {:base-url   "http://localhost:3005"
+  :browser    :chromium
+  :headless   true
+  :timeout-ms 30000
+  :scenarios
+  [{:id    :hyperframes-deck-presents
+    :tags  [:hyperframes :smoke]
+    :doc   "The presenter loads the exported composition, shows the first
+            scene alone, and every scene registered its own timeline."
+    :steps [[:goto "/present.html"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f&&f.contentDocument;return !!(d&&d.querySelectorAll('[data-composition-id]').length>0&&d.querySelector('[data-composition-id=\"welcome\"]'));})()"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var w=f&&f.contentWindow;return !!(w&&w.__timelines&&Object.keys(w.__timelines).length>=16);})()"]
+            [:expect-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;var v=Array.prototype.filter.call(d.querySelectorAll('#main [data-composition-id]'),function(el){var cs=d.defaultView.getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden'&&Number(cs.opacity)>0;}).map(function(el){return el.getAttribute('data-composition-id');});return v.length===1&&v[0]==='welcome';})()"]]}
+
+   {:id    :hyperframes-fragments-step
+    :tags  [:hyperframes]
+    :doc   "Fragments step the way Reveal steps them: a slide is entered with
+            nothing revealed, Next reveals one fragment at a time, and once
+            the last is shown Next moves to the next scene, again with
+            nothing revealed."
+    :steps [[:goto "/present.html"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var w=f&&f.contentWindow;return !!(w&&w.__timelines&&Object.keys(w.__timelines).length>=16);})()"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;var cs=d.defaultView.getComputedStyle(d.querySelector('#welcome'));return cs.visibility!=='hidden'&&d.querySelectorAll('#welcome .fragment').length===1&&d.querySelectorAll('#welcome .fragment.visible').length===0;})()"]
+            [:eval-js "document.querySelector('hyperframes-slideshow').focus()"]
+            [:press "hyperframes-slideshow" "ArrowRight"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;return d.querySelectorAll('#welcome .fragment.visible').length===1;})()"]
+            [:expect-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;var cs=d.defaultView.getComputedStyle(d.querySelector('#welcome'));return cs.visibility!=='hidden';})()"]
+            [:press "hyperframes-slideshow" "ArrowRight"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;var cs=d.defaultView.getComputedStyle(d.querySelector('#a-deck-is-a-value'));return cs.visibility!=='hidden'&&cs.display!=='none';})()"]
+            [:expect-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;return d.querySelectorAll('#a-deck-is-a-value .fragment').length>0&&d.querySelectorAll('#a-deck-is-a-value .fragment.visible').length===0;})()"]
+            [:press "hyperframes-slideshow" "ArrowRight"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;return d.querySelectorAll('#a-deck-is-a-value .fragment.visible').length===1;})()"]]}
+
+   {:id    :hyperframes-scene-seeks
+    :tags  [:hyperframes]
+    :doc   "A Desargues scene is seeked, not played: its timeline object
+            answers a seek by redrawing the SVG at that time, and the deck
+            enters the slide on the scene's final frame."
+    :steps [[:goto "/present.html"]
+            [:wait-for-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var w=f&&f.contentWindow;return !!(w&&w.__timelines&&w.__timelines.animation);})()"]
+            [:expect-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var d=f.contentDocument;return !d.querySelector('#animation [data-plato-scene]')&&!!d.querySelector('#animation .plato-scene svg');})()"]
+            [:expect-js "(function(){var p=document.querySelector('hyperframes-player');var f=(p&&p.shadowRoot&&p.shadowRoot.querySelector('iframe'))||document.querySelector('iframe');var w=f.contentWindow;var d=f.contentDocument;var tl=w.__timelines.animation;tl.seek(0);var at0=d.querySelector('#animation .plato-scene svg').outerHTML;tl.seek(3);var at3=d.querySelector('#animation .plato-scene svg').outerHTML;return at0!==at3&&tl.time()===3&&tl.duration()>6;})()"]]}]}}
