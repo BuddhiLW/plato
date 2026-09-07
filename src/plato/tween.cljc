@@ -26,8 +26,14 @@
 ;; ── pure sRGB hex lerp (reader-conditional ONLY for the parse) ───────────────
 (defn- hex->rgb [h]
   (let [h (if (str/starts-with? h "#") (subs h 1) h)
-        p (fn [i] #?(:cljs    (js/parseInt      (subs h i (+ i 2)) 16)
-                     :default (Integer/parseInt (subs h i (+ i 2)) 16)))]
+        p (fn [i]
+            (let [pair (subs h i (+ i 2))]
+              ;; `:rust` sits before `:default` because clojurust has no
+              ;; `Integer/parseInt`; its reader does take radix literals, so
+              ;; `16rff` is the portable way to read a hex pair there.
+              #?(:cljs    (js/parseInt pair 16)
+                 :rust    (read-string (str "16r" pair))
+                 :default (Integer/parseInt pair 16))))]
     [(p 0) (p 2) (p 4)]))
 
 (defn- byte->hex [n]
