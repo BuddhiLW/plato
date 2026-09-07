@@ -1,6 +1,6 @@
 {
   "name": "@buddhilw/plato",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": false,
   "description": "Data-driven ClojureScript presentation engine powered by Reveal.js and Desargues scene graphs.",
   "license": "MIT",
