@@ -1,0 +1,19 @@
+/* plato responsive tokens -- GENERATED, do not edit.
+   Regenerate: clojure -M:derive
+
+   Every value below answers two constraints at once: a token must
+   PAINT at or above its legibility floor on the target screen, and the
+   tallest slide must still FIT the slide box once the type scale is
+   raised to get it there. Derived by plato.responsive over
+   hive-cljs.derive, which is what makes each line answerable.
+
+   The FIT half stands at the ESTIMATED rung: the tallest slide is
+   measured by plato.estimate's box model, not by a browser. A target
+   reported unsatisfiable below is unsatisfiable according to that
+   model; the browser rung may disagree by the model's own margin.
+
+    phone: type scale 1.0
+    phone: UNSATISFIABLE -- legibility wants 1.587x, the tallest slide does not allow it; cut content on that slide
+*/
+
+

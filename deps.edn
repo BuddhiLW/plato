@@ -6,4 +6,20 @@
   :test {:extra-paths ["test" "examples"]
          :main-opts ["-m" "plato.test-runner"]}
   :cli {:extra-paths ["examples"]
-        :main-opts ["-m" "plato.cli"]}}}
+        :main-opts ["-m" "plato.cli"]}
+  ;; The responsive derivation is a BUILD step, like scripts/gen_nfd.clj: a
+  ;; JVM-only generator whose output (public/css/plato-responsive.css) is a
+  ;; portable artifact. plato.responsive holds the rules and loads everywhere;
+  ;; only the engine that runs them lives behind this alias.
+  :derive {:extra-paths ["examples" "scripts"]
+           :extra-deps {io.github.hive-agi/hive-cljs {:mvn/version "0.2.16"}}
+           :main-opts ["-m" "gen-responsive"]}
+
+  ;; The fit gate is the one part of plato's suite with a dependency plato
+  ;; itself does not carry, which is why it has its own source root: `-M:test`
+  ;; stays dependency-free and `-M:gate` adds hive-cljs. Both aliases take an
+  ;; untracked local.deps.edn override while a version is unreleased:
+  ;;   clojure -Sdeps "$(cat local.deps.edn)" -M:gate
+  :gate {:extra-paths ["test" "gate" "examples"]
+         :extra-deps {io.github.hive-agi/hive-cljs {:mvn/version "0.2.16"}}
+         :main-opts ["-m" "plato.test-runner" "gate"]}}}

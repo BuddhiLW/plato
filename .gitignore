@@ -15,3 +15,5 @@
 /.clj-kondo/imports/
 /.lsp/
 /.dev/
+
+/local.deps.edn
