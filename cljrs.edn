@@ -1,0 +1,32 @@
+;; cljrs.edn — plato on clojurust.
+;;
+;; plato's portable core is .cljc, and clojurust selects the `:rust` branch of
+;; a reader conditional (not `:clj`, and not `:cljs`). An unknown feature key
+;; is skipped by every reader, which is why `#?(:rust … :default …)` reads
+;; correctly on all three hosts.
+;;
+;;   cljrs run <script.cljrs>     with this file's :paths on the source path
+;;
+;; The media extensions are Rust, and they are declared as :local/root so they
+;; build from the working tree next door — edit the crate, require again, get
+;; the rebuild. Both of them and the host binary must come from ONE clojurust
+;; checkout: `&mut Registry` crosses the dylib boundary, so a second copy of
+;; cljrs-interop is a type error rather than a version warning. See the note in
+;; video-processing-cljrs/Cargo.toml.
+;;
+;; Nothing in plato's own sources requires these; they are what the `:rust`
+;; branch of a video export reaches for. Plain SVG export (plato.snapshot)
+;; needs neither.
+
+{:paths ["src"]
+
+ :deps
+ {cljrs.raster {:local/root "../../video-processing-cljrs"
+                :rust/load  :dylib
+                :rust/init  "cljrs_raster::register"
+                :rust/crate "src/crates/raster"}
+
+  cljrs.ffmpeg {:local/root "../../video-processing-cljrs"
+                :rust/load  :dylib
+                :rust/init  "cljrs_ffmpeg::register"
+                :rust/crate "src/crates/ffmpeg"}}}

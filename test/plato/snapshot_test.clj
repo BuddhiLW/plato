@@ -74,3 +74,29 @@
 (deftest serializer-escapes-content
   (is (= "<text>A &amp; B</text>"
          (snapshot/hiccup->str [:text "A & B"]))))
+
+;; ── Portability ──────────────────────────────────────────────────────────────
+;;
+;; This namespace is .cljc: the same sampling runs on the JVM and on clojurust,
+;; where `Math/round` and `java.io.File` do not exist. These pin the two
+;; behaviours that had to be rewritten to get there.
+
+(deftest frame-names-are-zero-padded-to-five-digits
+  (is (= "frame-00000.svg" (snapshot/frame-name 0)))
+  (is (= "frame-00042.svg" (snapshot/frame-name 42)))
+  (is (= "frame-99999.svg" (snapshot/frame-name 99999)))
+  (testing "a frame past the pad width still names a file, just a wider one"
+    (is (= "frame-100000.svg" (snapshot/frame-name 100000))))
+  (testing "lexical order is temporal order within the pad width"
+    (let [names (mapv snapshot/frame-name (range 12))]
+      (is (= names (vec (sort names)))))))
+
+(deftest frame-count-rounds-half-up
+  ;; `(long (+ 0.5 x))` replaced `Math/round`; they agree on non-negative
+  ;; values, which duration x fps always is. Both endpoints are sampled, so
+  ;; the count is one more than the number of intervals.
+  (let [dur (snapshot/scene-duration fixture/graph)]
+    (doseq [fps [1 4 10 30]]
+      (let [expected (inc (long (+ 0.5 (* (double dur) (double fps)))))]
+        (is (= expected (count (snapshot/frame-times fixture/graph fps)))
+            (str "frame count at " fps " fps"))))))

@@ -1,9 +1,15 @@
 (ns plato.snapshot
-  "Static final-frame SVG export of a Desargues scene graph."
+  "SVG export of a Desargues scene graph: one frame, or every frame.
+
+  Sampling a scene into SVG is arithmetic over the compiled timeline, so it
+  runs wherever plato's core runs. Only the last two functions here touch a
+  filesystem; everything above them is pure."
   (:require [plato.geometry :as geometry]
             [plato.hiccup :as hiccup]
             [plato.render :as render]
-            [plato.timeline :as timeline]))
+            [plato.timeline :as timeline]
+            #?(:rust [clojure.rust.io :as io]
+               :clj  [clojure.java.io :as io])))
 
 (defn hiccup->str
   "Hiccup value -> HTML/XML string."
@@ -53,7 +59,10 @@
   yields a single time: a still is a one-frame video, not an empty one."
   [graph fps]
   (let [dur (double (scene-duration graph))
-        n (long (Math/round (* dur (double fps))))]
+        ;; Round half up. `Math/round` is the obvious spelling and clojurust
+        ;; has no such static; duration and fps are both non-negative here,
+        ;; which is the range where adding 0.5 and truncating agrees with it.
+        n (long (+ 0.5 (* dur (double fps))))]
     (if (or (zero? n) (zero? dur))
       [0.0]
       (mapv (fn [i] (* dur (/ (double i) n))) (range (inc n))))))
@@ -67,6 +76,13 @@
   (let [compiled (timeline/compile-timeline graph)]
     (map (fn [t] [t (scene->svg graph t compiled)]) (frame-times graph fps))))
 
+(defn frame-name
+  "File name for frame `i`, zero-padded to five digits."
+  [i]
+  (let [digits (str i)
+        zeros (apply str (repeat (max 0 (- 5 (count digits))) "0"))]
+    (str "frame-" zeros digits ".svg")))
+
 (defn write-frames!
   "Write one SVG per sampled frame into `dir`, returning the paths in order.
 
@@ -74,16 +90,21 @@
   one, which is what every downstream tool that globs a frame directory
   assumes."
   [dir graph fps]
-  (let [dir-file (java.io.File. ^String dir)]
-    (.mkdirs dir-file)
-    (vec
-     (map-indexed
-      (fn [i [_ svg]]
-        (let [path (str dir "/" (format "frame-%05d.svg" i))]
-          (spit path svg)
-          path))
-      (scene->frames graph fps)))))
+  (vec
+   (map-indexed
+    (fn [i [_ svg]]
+      (let [path (str dir "/" (frame-name i))]
+        ;; `make-parents` creates the frame's directory, which is the only
+        ;; reason the directory is created at all — it is the one portable
+        ;; spelling of mkdir -p across the hosts plato runs on.
+        (io/make-parents path)
+        (spit path svg)
+        path))
+    (scene->frames graph fps))))
 
-(defn write-svg! [path graph]
+(defn write-svg!
+  "Write `graph`'s final frame to `path`, returning the path."
+  [path graph]
+  (io/make-parents path)
   (spit path (scene->svg graph))
   path)
