@@ -116,6 +116,14 @@ is projected identically by live and static HTML rendering:
   (content/column (content/bullets ["One" "Two"]) {:width :fill})])
 ~~~
 
+`content/code` takes the highlight.js language name as its keyword. The island
+plato links into a prerendered page registers `bash`, `clojure`, `ini`,
+`markdown`, `plaintext` and `rust` rather than all 190 (the full dist is 921 KB,
+and it was the single largest thing a visitor downloaded). TOML is `:ini`,
+because highlight.js has no separate TOML definition. A language outside that
+set renders as plain text instead of failing, so add one by requiring it in
+`plato.highlight` and rebuilding the island.
+
 ### As Markdown or Org
 
 ~~~markdown
@@ -163,6 +171,35 @@ Which formats exist is not decided in the CLI. `plato.source` holds one multimet
 ~~~
 
 Requiring that namespace is all the CLI needs — the same open/closed shape as `plato.content/render`.
+
+## Install the CLI
+
+Three ways, and the difference between them is what `plato` on your PATH points at.
+
+~~~bash
+# 1. A pinned release, from the tap. What a deck author elsewhere wants.
+brew install buddhilw/tap/plato
+
+# 2. This checkout, as a launcher. An edit to src/ changes the next run.
+bb install                  # -> ~/.local/bin/plato, themes linked to ./theme
+bb uninstall
+
+# 3. This checkout, as a self-contained native binary. No JVM at run time.
+bb cli                      # -> dist/plato, built with ClojureWasm
+bb install --native
+~~~
+
+The launcher and the formula generate the same shell script and differ in one
+line: the formula resolves a pinned `:git/tag` + `:git/sha`, the local install
+resolves `:local/root` against the working tree. So `brew` is reproducible and
+`bb install` is live, and nothing else about them is different.
+
+`scripts/install.sh --prefix <dir>` puts the launcher somewhere other than
+`~/.local`. It links `$XDG_DATA_HOME/plato/themes` at this tree's `theme/`, and
+refuses to touch that path if it already exists as a real directory.
+
+A deck still pins plato in its own `deps.edn`. The CLI is for authoring, not for
+reproducing a build.
 
 ## The CLI
 

@@ -20,15 +20,25 @@
             ["highlight.js/lib/core" :as hljs]
             ["highlight.js/lib/languages/bash" :as bash]
             ["highlight.js/lib/languages/clojure" :as clojure]
+            ["highlight.js/lib/languages/ini" :as ini]
             ["highlight.js/lib/languages/markdown" :as markdown]
-            ["highlight.js/lib/languages/plaintext" :as plaintext]))
+            ["highlight.js/lib/languages/plaintext" :as plaintext]
+            ["highlight.js/lib/languages/rust" :as rust]))
 
 (def languages
-  "hljs name -> language definition. Registered once, at load."
+  "hljs name -> language definition. Registered once, at load.
+
+   `ini` is also how highlight.js parses TOML: there is no separate toml
+   definition, so `:ini` is the honest language keyword for a Cargo.toml or a
+   deps block. `rust` earns its place because a deck explaining a native or
+   WebAssembly library shows Rust beside the Clojure that calls it, and an
+   unhighlighted Rust block was the one thing the previous set could not do."
   {"bash" bash
    "clojure" clojure
+   "ini" ini
    "markdown" markdown
-   "plaintext" plaintext})
+   "plaintext" plaintext
+   "rust" rust})
 
 (doseq [[name definition] languages]
   (.registerLanguage hljs name definition))

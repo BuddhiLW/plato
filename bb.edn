@@ -23,4 +23,14 @@
   ;; Not `shell`: a task's name becomes a var in the tasks namespace, and that
   ;; one is already babashka.process/shell, referred above.
   shells  {:doc "Release-build the Reagent dev shells under public/ (browser suite only)"
-           :task (shell "npx shadow-cljs release app acme")}}}
+           :task (shell "npx shadow-cljs release app acme")}
+
+  ;; Installing. `brew install buddhilw/tap/plato` gets a PINNED tag and is what
+  ;; someone authoring a deck elsewhere wants. These two install the code in
+  ;; front of you: an edit to src/ changes the next `plato` run, no reinstall.
+  cli       {:doc "Build the self-contained native CLI with ClojureWasm -> dist/plato"
+             :task (shell "bash scripts/build-cli.sh")}
+  install   {:doc "Install `plato` from THIS checkout into ~/.local/bin (pass --native for the binary)"
+             :task (apply shell "bash" "scripts/install.sh" *command-line-args*)}
+  uninstall {:doc "Remove the locally installed `plato` and its theme link"
+             :task (shell "bash scripts/install.sh --uninstall")}}}
