@@ -11,6 +11,14 @@
     (is (.contains svg "opacity=\"1.0\""))
     (is (.contains svg "</svg>"))))
 
+(deftest a-portrait-scene-exports-a-portrait-svg
+  (let [svg (snapshot/scene->svg {:scene :portrait
+                                  :frame {:width 8 :height 14.222}
+                                  :nodes {1 {:id 1 :node :text :text "x" :at [0 0]}}
+                                  :steps [{:step :play :anims [{:anim :appear :target 1}]}]})]
+    (is (.contains svg "width=\"480.0\""))
+    (is (.contains svg "height=\"853.3199999999999\""))))
+
 ;; ── Frames at arbitrary times ────────────────────────────────────────────────
 ;;
 ;; `timeline/frame` was always a function of wall-clock time; only this

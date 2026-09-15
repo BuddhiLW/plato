@@ -9,7 +9,8 @@
             [plato.render :as render]
             [plato.timeline :as timeline]
             #?(:rust [clojure.rust.io :as io]
-               :clj  [clojure.java.io :as io])))
+               :clj  [clojure.java.io :as io])
+            [plato.scene :as sc]))
 
 (defn hiccup->str
   "Hiccup value -> HTML/XML string."
@@ -32,17 +33,18 @@
    ;; The compiled timeline is accepted so that sampling many frames of one
    ;; scene compiles it once instead of once per frame.
    (let [frame (timeline/frame compiled (or now (:duration compiled)))
+         [vw vh] (geometry/view-size (sc/frame graph))
          [_ attrs & groups] (render/scene-svg (render/svg-target) graph frame
                                               (:node-ids compiled))]
      (hiccup->str
       (into [:svg (assoc attrs
                          :xmlns "http://www.w3.org/2000/svg"
-                         :width geometry/view-w
-                         :height geometry/view-h)
+                         :width vw
+                         :height vh)
              [:rect {:x 0
                      :y 0
-                     :width geometry/view-w
-                     :height geometry/view-h
+                     :width vw
+                     :height vh
                      :fill "#0b0e13"}]]
             groups)))))
 

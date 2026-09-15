@@ -73,6 +73,9 @@
     "      --asset-base <path> prefix for css/ and vendor/ links (default: .)"
     "      --assets <dir>      copy css/, assets/, the scene bundle and the HyperFrames"
     "                          runtime from <dir> into the project"
+    "      --width <px>        composition width (default: 1920)"
+    "      --height <px>       composition height (default: 1080); 1080 x 1920"
+    "                          is the vertical frame an ad is cut in"
     "      --print             write the page to stdout instead of a file"
     ""
     "serve options — a dev server (JVM): the deck rendered from its source on every"
@@ -104,6 +107,8 @@
    "--tokens" [:tokens 1]
    "--asset-base" [:asset-base 1]
    "--assets" [:assets 1]
+   "--width" [:width 1]
+   "--height" [:height 1]
    "--math" [:math? 0]
    "--fit" [:fit? 0]
    "--live-scenes" [:live-scenes? 0]
@@ -222,12 +227,16 @@
 
 (defn- page-opts
   "The render options both deck jobs read off the CLI opts. :after-slides and
-   :after-player are hiccup a caller (the dev server) appends to a page."
+   :after-player are hiccup a caller (the dev server) appends to a page.
+   :width and :height travel as authored: they are interpolated into CSS and
+   into data attributes, never measured, so a CLI string needs no parsing."
   [opts sheets theme-tokens]
   (cond-> {:stylesheets sheets}
     (:title opts) (assoc :title (:title opts))
     (:description opts) (assoc :description (:description opts))
     (:asset-base opts) (assoc :asset-base (:asset-base opts))
+    (:width opts) (assoc :width (:width opts))
+    (:height opts) (assoc :height (:height opts))
     (:after-slides opts) (assoc :after-slides (:after-slides opts))
     (:after-player opts) (assoc :after-player (:after-player opts))
     (or (:theme opts) (get-in theme-tokens [:meta :reveal-theme]))

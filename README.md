@@ -366,6 +366,15 @@ page. `--assets <dir>` copies `css/`, `assets/`, the scene bundle and `hyperfram
 runtime and player `bb assets` vendors from the `@hyperframes/core` and `@hyperframes/player`
 packages; a page links them beside itself and never phones a CDN.
 
+### A vertical cut
+
+`--width` and `--height` set the composition's frame; the default is 1920x1080.
+`--width 1080 --height 1920` exports the same deck as a 9:16 page, which is what a
+Reel or a Short is rendered from, and the deck, every slide and the viewport meta
+follow that frame. The numbers travel as authored (they are interpolated into CSS
+and into `data-width` / `data-height`, never measured), so the CLI hands them
+through without parsing and the flag works on every host plato runs on.
+
 Two things to know. A slide id HyperFrames reserves (`main`, or one containing `caption` or
 `ambient`) becomes `s-<hash>` in the project. And `npx hyperframes present <dir>` is HyperFrames’
 own presenter over the same `index.html`; in this repo’s browser suite it never bound the deck,
@@ -407,6 +416,20 @@ Both RecordingBackend outputs are accepted:
 - declarative layout scenes from <code>desargues.scene/render-layout!</code> — nodes carry `:box`, `:style` and `:content`
 
 Scene-level layout reveals carry `:target :scene` and `:ids`; timeline compilation expands them to one span per node.
+
+A scene may declare the world it was authored in:
+
+~~~clojure
+{:scene :reel :frame [8 14.222] ...}     ; 9:16, a 480x853 viewBox
+{:scene :talk :frame {:width 14.222 :height 8} ...}
+~~~
+
+Without `:frame` a scene is the 16:9 world it always was (14.222 x 8 units, 60 px
+per unit). With one, every position, every length and the `viewBox` are read
+against it, on both render paths, so the same scene renders portrait in the
+browser, in a static export and through `plato.snapshot`. A `:text` node also
+takes `:anchor` (`:start`, `:middle`, `:end`), which is the only way to left-align
+a line in SVG: a row of subtitles needs it, a centred title does not.
 
 Add a scene node kind with a `plato.render/node->hiccup` method; add an animation with a `plato.tween/build-span` method and its channel entry. Alternate visual targets implement `IRenderTarget`; alternate clocks implement `IPlayer`.
 

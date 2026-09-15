@@ -18,19 +18,20 @@
   (color/hex (or (get-in nd [:fill :color]) (get-in nd [:opts :color]) :white)))
 
 (defn- initial-node-state [g nd]
-  (if (= :line (:node nd))
-    (let [f (geo/point (:from nd)) t (geo/point (:to nd))]          ; a line has endpoints, not an :at
-      {:value   nil
-       :fill    (rest-fill nd)
-       :from-px [(:x f) (:y f)]
-       :to-px   [(:x t) (:y t)]
-       :pos-px  [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]
-       :base-px [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]})
-    (let [{:keys [x y]} (geo/point (sc/resolve-at g nd))]    ; world -> SVG px, y-flip once
-      {:value   (:value nd)                                  ; 23->1000.0, 25->0.0, else nil
-       :fill    (rest-fill nd)
-       :pos-px  [x y]
-       :base-px [x y]})))                                       ; immutable rest anchor
+  (let [fr (sc/frame g)]
+    (if (= :line (:node nd))
+      (let [f (geo/point fr (:from nd)) t (geo/point fr (:to nd))]          ; a line has endpoints, not an :at
+        {:value   nil
+         :fill    (rest-fill nd)
+         :from-px [(:x f) (:y f)]
+         :to-px   [(:x t) (:y t)]
+         :pos-px  [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]
+         :base-px [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]})
+      (let [{:keys [x y]} (geo/point fr (sc/resolve-at g nd))]    ; world -> SVG px, y-flip once
+        {:value   (:value nd)                                  ; 23->1000.0, 25->0.0, else nil
+         :fill    (rest-fill nd)
+         :pos-px  [x y]
+         :base-px [x y]}))))                                       ; immutable rest anchor
 
 (defn init-state
   "id -> {:value :fill :pos-px :base-px}. Only these are read by tween constructors."

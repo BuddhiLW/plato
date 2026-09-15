@@ -468,13 +468,14 @@
 ;; ── document ────────────────────────────────────────────────────────────────
 
 (def base-css
-  "The frame, the clip box and the reveal states, sized for 1920x1080. Colors
-   and faces come from the plato theme tokens when the page links them, with
-   fallbacks so a page without the sheet is still legible."
+  "The clip box and the reveal states. Colors and faces come from the plato
+   theme tokens when the page links them, with fallbacks so a page without the
+   sheet is still legible. Nothing here knows the frame size: that is
+   `frame-css`, so one deck can export at 1920x1080 and at 1080x1920."
   (str
    "body{margin:0;background:#000}\n"
-   ".plato-deck{position:relative;width:1920px;height:1080px;overflow:hidden}\n"
-   ".plato-slide{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;"
+   ".plato-deck{position:relative;overflow:hidden}\n"
+   ".plato-slide{position:absolute;inset:0;overflow:hidden;"
    "background:var(--plato-bg,#141414);color:var(--plato-fg,#f2efe9);"
    "font-family:var(--plato-sans,system-ui,sans-serif);font-size:44px;line-height:1.35}\n"
    ".clip{position:absolute;inset:0;display:grid;place-items:center;"
@@ -490,6 +491,15 @@
    ".fragment{opacity:0;transition:opacity 0.3s}\n"
    ".fragment.visible{opacity:1}\n"))
 
+(defn frame-css
+  "The pixel frame of one export. The deck and every slide are exactly this
+   box, which is what makes a vertical ad (1080x1920) the same deck as a
+   16:9 one. Sizes are interpolated as authored, so a caller may pass the
+   number 1080 or the string a CLI flag carries."
+  [{:keys [width height]}]
+  (str ".plato-deck{width:" width "px;height:" height "px}\n"
+       ".plato-slide{width:" width "px;height:" height "px}\n"))
+
 (def default-opts
   (merge frame
          {:asset-base "."
@@ -498,7 +508,7 @@
 (defn- stylesheet [href]
   [:link {:rel "stylesheet" :href href}])
 
-(defn- head-hiccup [deck {:keys [asset-base title description stylesheets width height]}]
+(defn- head-hiccup [deck {:keys [asset-base title description stylesheets width height] :as opts}]
   (let [description (or description (:description deck))]
     (into (cond-> [:head
                    [:meta {:charset "utf-8"}]
@@ -506,7 +516,7 @@
                    [:script {:src (str asset-base (:src hyperframes-runtime))}]]
             description (conj [:meta {:name "description" :content description}])
             true (conj [:title (or title (:title deck) "Plato")]
-                       [:style base-css]
+                       [:style (str base-css (frame-css opts))]
                        (stylesheet (str asset-base "/css/plato.css"))))
           (map stylesheet)
           stylesheets)))

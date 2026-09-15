@@ -107,12 +107,13 @@
 ;; NOT threaded — the seed + the active span fully determine it.
 (defmulti build-span (fn [_ctx anim] (:anim anim)))
 
-(defmethod build-span :connect [{:keys [state]} anim]
+(defmethod build-span :connect [{:keys [g state]} anim]
   (let [id   (:target anim)
+        fr   (sc/frame g)
         f    (get-in state [id :from-px])                   ; current endpoints (threaded)
         t    (get-in state [id :to-px])
-        f'   (let [{:keys [x y]} (geo/point (pget anim :from))] [x y])
-        t'   (let [{:keys [x y]} (geo/point (pget anim :to))] [x y])]
+        f'   (let [{:keys [x y]} (geo/point fr (pget anim :from))] [x y])
+        t'   (let [{:keys [x y]} (geo/point fr (pget anim :to))] [x y])]
     {:tween (->Connect f t f' t') :writes {:from-px f' :to-px t'}}))
 
 (defmethod build-span :appear [_ _] {:tween (->Appear) :writes nil})
@@ -134,11 +135,11 @@
         dp   (get-in (sc/node g id) [:opts :num-decimal-places] 0)]
     {:tween (->CountTo from to dp) :writes {:value to}}))
 
-(defmethod build-span :glide [{:keys [state]} anim]
+(defmethod build-span :glide [{:keys [g state]} anim]
   (let [id      (:target anim)
         [fx fy] (get-in state [id :pos-px])                 ; current position (threaded)
         [bx by] (get-in state [id :base-px])                ; immutable rest anchor
-        {:keys [x y]} (geo/point (pget anim :to))]          ; y-flip applied ONCE, in geo
+        {:keys [x y]} (geo/point (sc/frame g) (pget anim :to))]          ; y-flip applied ONCE, in geo
     {:tween (->Glide fx fy x y bx by) :writes {:pos-px [x y]}}))
 
 (defmethod build-span :emphasize [{:keys [state]} anim]

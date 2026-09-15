@@ -52,6 +52,16 @@
   (is (str/includes? page "src=\"./vendor/plato-scene/main.js\"") "a deck with a scene loads the scene bundle")
   (is (not (str/includes? page "gsap"))))
 
+(deftest the-frame-is-the-export-size-not-a-constant
+  (let [vertical (hf/deck->composition model {:width 1080 :height 1920})]
+    (is (str/includes? vertical ".plato-deck{width:1080px;height:1920px}"))
+    (is (str/includes? vertical ".plato-slide{width:1080px;height:1920px}"))
+    (is (str/includes? vertical "<meta content=\"width=1080, height=1920\" name=\"viewport\">"))
+    (is (str/includes? vertical "data-height=\"1920\"")
+        "the composition declares the frame HyperFrames renders at")
+    (is (str/includes? page ".plato-deck{width:1920px;height:1080px}")
+        "and the default is the 16:9 frame it always was")))
+
 (deftest the-deck-is-one-root-composition
   (is (str/includes? page "<div id=\"main\" class=\"plato-deck\" data-composition-id=\"main\" data-duration=\"34.5\" data-height=\"1080\" data-start=\"0\" data-width=\"1920\">")
       "the root spans the deck: where the last scene ends")

@@ -1,11 +1,19 @@
 (ns plato.scene
   "L1 scene model: pure accessors over a desargues scene-graph
-   {:scene :nodes {id->node} :steps [...] :node-count n}.")
+   {:scene :nodes {id->node} :steps [...] :node-count n}."
+  (:require [plato.geometry :as geo]))
 
 (defn scene-name [g] (:scene g))
 (defn nodes [g] (:nodes g))
 (defn node [g id] (get (:nodes g) id))
 (defn steps [g] (:steps g))
+
+(defn frame
+  "The world frame a scene declares, as [w h] in world units, or the default
+   16:9 frame when it declares none. A scene that declares {:frame [8 14.222]}
+   is authored portrait: every position, length and the viewBox follow it."
+  [g]
+  (geo/frame-size (:frame g)))
 
 (declare resolve-at)
 

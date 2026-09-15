@@ -28,9 +28,10 @@
 
 (defn- line-el
   "A :line node: endpoints in world units, stroke from :stroke or :opts."
-  [_g nd]
-  (let [a (geo/point (:from nd))
-        b (geo/point (:to nd))
+  [g nd]
+  (let [fr (sc/frame g)
+        a (geo/point fr (:from nd))
+        b (geo/point fr (:to nd))
         s (or (:stroke nd) {:color (get-in nd [:opts :color] :white)
                              :width (get-in nd [:opts :width] 3)})]
     [:line {:x1 (:x a) :y1 (:y a) :x2 (:x b) :y2 (:y b)
@@ -48,8 +49,9 @@
 
 (defn- layout-origin [g]
   (if-let [{:keys [w h]} (layout-root-box g)]
-    [(/ (- geo/frame-w w) 2.0)
-     (/ (- geo/frame-h h) 2.0)]
+    (let [[fw fh] (sc/frame g)]
+      [(/ (- fw w) 2.0)
+       (/ (- fh h) 2.0)])
     [0.0 0.0]))
 
 (defn- point-of [g nd]
@@ -57,7 +59,7 @@
     (let [[ox oy] (layout-origin g)]
       {:x (geo/->len (+ ox x (/ w 2.0)))
        :y (geo/->len (+ oy y (/ h 2.0)))})
-    (geo/point (sc/resolve-at g nd))))
+    (geo/point (sc/frame g) (sc/resolve-at g nd))))
 
 (defn- box-length [nd key option fallback]
   (if-let [value (get-in nd [:box key])]
@@ -93,8 +95,12 @@
         fs    (style-value nd :font-size 24)
         col   (color/hex (style-value nd :color :white))
         weight (style-value nd :weight "NORMAL")
-        bold? (or (= "BOLD" weight) (= :bold weight))]
-    [:text {:x x :y y :text-anchor "middle" :dominant-baseline "central"
+        bold? (or (= "BOLD" weight) (= :bold weight))
+        anchor (get {:start "start" :end "end" :middle "middle"
+                     "start" "start" "end" "end" "middle" "middle"}
+                    (style-value nd :anchor :middle)
+                    "middle")]
+    [:text {:x x :y y :text-anchor anchor :dominant-baseline "central"
             :font-size fs :fill col
             :font-weight (if bold? "700" "400")
             :font-family "system-ui, sans-serif"}
@@ -204,9 +210,10 @@
 (defn scene-svg
   "Hiccup <svg> for graph g at frame, drawing node-ids in order through target."
   [target g frame node-ids]
-  (into
-   [:svg {:viewBox (str "0 0 " geo/view-w " " geo/view-h)
-          :preserveAspectRatio "xMidYMid meet"
-          :role "img"
-          :aria-label (str (sc/scene-name g))}]
-   (map #(node-group target g frame %) node-ids)))
+  (let [[vw vh] (geo/view-size (sc/frame g))]
+    (into
+     [:svg {:viewBox (str "0 0 " vw " " vh)
+            :preserveAspectRatio "xMidYMid meet"
+            :role "img"
+            :aria-label (str (sc/scene-name g))}]
+     (map #(node-group target g frame %) node-ids))))
