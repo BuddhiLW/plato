@@ -23,7 +23,12 @@
   The one-argument arity is the final frame, which is what a still export
   wants. Passing a time is what a video export wants: every frame of a scene is
   reachable, not just the last one, because `plato.timeline/frame` was already
-  a function of wall-clock time and only this namespace pinned it to the end."
+  a function of wall-clock time and only this namespace pinned it to the end.
+
+  The scene sits on a backdrop rect, because an SVG with no background is
+  whatever the viewer puts behind it. `:background` on the graph names that
+  colour, and `:none` leaves it out: an export that will be composited over
+  something else must not paint over it first."
   ([graph]
    (let [compiled (timeline/compile-timeline graph)]
      (scene->svg graph (:duration compiled) compiled)))
@@ -34,18 +39,20 @@
    ;; scene compiles it once instead of once per frame.
    (let [frame (timeline/frame compiled (or now (:duration compiled)))
          [vw vh] (geometry/view-size (sc/frame graph))
+         background (:background graph "#0b0e13")
          [_ attrs & groups] (render/scene-svg (render/svg-target) graph frame
                                               (:node-ids compiled))]
      (hiccup->str
-      (into [:svg (assoc attrs
-                         :xmlns "http://www.w3.org/2000/svg"
-                         :width vw
-                         :height vh)
-             [:rect {:x 0
-                     :y 0
-                     :width vw
-                     :height vh
-                     :fill "#0b0e13"}]]
+      (into (cond-> [:svg (assoc attrs
+                                 :xmlns "http://www.w3.org/2000/svg"
+                                 :width vw
+                                 :height vh)]
+              (not= :none background)
+              (conj [:rect {:x 0
+                            :y 0
+                            :width vw
+                            :height vh
+                            :fill background}]))
             groups)))))
 
 (defn scene-duration

@@ -73,6 +73,32 @@
     (is (= "middle" (:text-anchor (text-of portrait-graph)))
         "centred stays the default")))
 
+(deftest text-sets-the-face-the-node-asks-for
+  (let [branded (assoc-in portrait-graph [:nodes 1 :opts :font-family] "Lato, sans-serif")
+        family-of (fn [g] (->> (final-svg g)
+                               (tree-seq coll? seq)
+                               (filter #(and (vector? %) (= :text (first %))))
+                               first
+                               second
+                               :font-family))]
+    (is (= "Lato, sans-serif" (family-of branded))
+        "an exported SVG is read by a rasteriser, not by a page with a stylesheet, so the node is the only place left to name the face")
+    (is (= "system-ui, sans-serif" (family-of portrait-graph))
+        "the host's UI font stays the default, so no existing deck moves")))
+
+(deftest text-fades-like-every-other-node
+  (let [faded (assoc-in portrait-graph [:nodes 1 :fill :opacity] 0.4)
+        alpha-of (fn [g] (->> (final-svg g)
+                              (tree-seq coll? seq)
+                              (filter #(and (vector? %) (= :text (first %))))
+                              first
+                              second
+                              :fill-opacity))]
+    (is (= 0.4 (alpha-of faded))
+        "type set behind a subject has to recede, and a text node had no way to say so")
+    (is (= 1 (alpha-of portrait-graph))
+        "opaque stays the default")))
+
 (deftest positions-are-read-against-the-declared-frame
   (let [texts (->> (final-svg portrait-graph)
                    (tree-seq coll? seq)

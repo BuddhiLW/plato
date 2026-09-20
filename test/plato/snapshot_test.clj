@@ -11,6 +11,17 @@
     (is (.contains svg "opacity=\"1.0\""))
     (is (.contains svg "</svg>"))))
 
+(deftest the-backdrop-is-the-scene-s-to-choose
+  (testing "a colour the scene names"
+    (is (str/includes? (snapshot/scene->svg (assoc fixture/graph :background "#123456"))
+                       "fill=\"#123456\"")))
+  (testing "none at all, for an export that will be composited over something"
+    (let [svg (snapshot/scene->svg (assoc fixture/graph :background :none))]
+      (is (not (str/includes? svg "<rect")))
+      (is (str/includes? svg "<circle"))))
+  (testing "and the house dark stays the default"
+    (is (str/includes? (snapshot/scene->svg fixture/graph) "fill=\"#0b0e13\""))))
+
 (deftest a-portrait-scene-exports-a-portrait-svg
   (let [svg (snapshot/scene->svg {:scene :portrait
                                   :frame {:width 8 :height 14.222}

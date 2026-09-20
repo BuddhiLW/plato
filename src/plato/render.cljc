@@ -96,14 +96,24 @@
         col   (color/hex (style-value nd :color :white))
         weight (style-value nd :weight "NORMAL")
         bold? (or (= "BOLD" weight) (= :bold weight))
+        ;; A deck that renders to a file, rather than into a page that carries
+        ;; its own stylesheet, has nowhere else to say which face to set: an
+        ;; exported SVG is read by a rasteriser, not by a browser with a
+        ;; :theme-css. The default is unchanged, so every existing deck still
+        ;; resolves against the host's UI font.
+        family (style-value nd :font-family "system-ui, sans-serif")
+        ;; Every other node fades through its :fill opacity. A line of text
+        ;; that cannot is a line that can only ever be foreground, which is
+        ;; wrong the moment a scene sets type behind its subject.
+        alpha (or (get-in nd [:fill :opacity]) (style-value nd :opacity 1))
         anchor (get {:start "start" :end "end" :middle "middle"
                      "start" "start" "end" "end" "middle" "middle"}
                     (style-value nd :anchor :middle)
                     "middle")]
     [:text {:x x :y y :text-anchor anchor :dominant-baseline "central"
-            :font-size fs :fill col
+            :font-size fs :fill col :fill-opacity alpha
             :font-weight (if bold? "700" "400")
-            :font-family "system-ui, sans-serif"}
+            :font-family family}
      content]))
 
 (defmethod node->hiccup :text [g nd]
