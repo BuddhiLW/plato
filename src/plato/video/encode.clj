@@ -247,7 +247,13 @@
     (when-not (and deck out)
       (println usage)
       (System/exit 2))
-    (let [r (render! (cli/deck-from-var deck) (dissoc o :deck :play?))]
+    (let [r (try
+              (render! (cli/deck-from-var deck) (dissoc o :deck :play?))
+              ;; A refused deck or a failed ffmpeg is a user-facing answer,
+              ;; not a crash: say it on one line and exit non-zero.
+              (catch clojure.lang.ExceptionInfo refused-or-failed
+                (binding [*out* *err*] (println "plato video:" (ex-message refused-or-failed)))
+                (System/exit 1)))]
       (println (format "%s  %d frames %dx%d  svg %.0f ms  raster+encode %.0f ms  total %.0f ms"
                        (:out r) (:frames r) (:width r) (:height r)
                        (get-in r [:ms :svg]) (get-in r [:ms :raster+encode]) (get-in r [:ms :total])))

@@ -381,6 +381,35 @@ own presenter over the same `index.html`; in this repo’s browser suite it neve
 because its element initialises before its children are parsed, so `present.html` is the page
 the suite drives. The suite lives in `test/hyperframes/hive-cljs.edn`.
 
+## Video without a browser
+
+A deck whose slides are Desargues scenes renders to MP4 with no Chromium. Every frame is a
+scene at a time t, so it is an SVG string computed up front; ffmpeg rasterises and encodes
+them in parallel. On a 15 s 1080x1920 spot this took 3.6 s, and 1.0 s at preview size, where
+the HyperFrames render took 16.5 s.
+
+~~~clojure
+(require '[plato.video.encode :as v])
+(v/preview! my.ads/vertical {:assets "assets"})   ; half size, shown in one looping mpv window
+(v/render!  my.ads/vertical {:out "out/spot.mp4" :assets "assets"})
+~~~
+
+~~~bash
+bb video --deck my.ads/vertical -o out/spot.mp4 --assets assets --preview --play
+~~~
+
+`preview!` reuses one mpv window: each call swaps the new render in, so trying a view is edit,
+eval, watch. A slide lasts its `:seconds` and holds its final frame; its `:background-color` is
+what is painted. `--assets <dir>` is where relative `:image` hrefs resolve; they are inlined
+into each frame, so every SVG stands alone.
+
+`:raster` picks the rasteriser. `:librsvg` (default) is ffmpeg's own SVG decoder, which finds
+fonts through fontconfig as Chrome does; the frames are split across one ffmpeg per core and
+joined without re-encoding. `:resvg` runs the `resvg` CLI once per frame, for an ffmpeg built
+without librsvg; name the binary with `:resvg-bin` or `RESVG`. `:encoder` is `:x264`, `:fast`
+or `:nvenc`. A slide that is not a scene is refused by name: that deck goes through
+`plato hyperframes`, which owns a browser. JVM only.
+
 ## Layers
 
 | Layer | Namespace | Runtime |

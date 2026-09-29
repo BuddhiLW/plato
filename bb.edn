@@ -24,6 +24,8 @@
   ;; one is already babashka.process/shell, referred above.
   shells  {:doc "Release-build the Reagent dev shells under public/ (browser suite only)"
            :task (shell "npx shadow-cljs release app acme")}
+  video   {:doc "Render a scene deck to MP4 with no browser: bb video --deck ns/var -o out.mp4 [--preview] [--play]"
+           :task (apply shell "clojure" "-M:dev" "-m" "plato.video.encode" *command-line-args*)}
 
   ;; Installing. `brew install buddhilw/tap/plato` gets a PINNED tag and is what
   ;; someone authoring a deck elsewhere wants. These two install the code in
