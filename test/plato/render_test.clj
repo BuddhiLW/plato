@@ -44,6 +44,23 @@
         keys-in-order (map #(:key (second %)) (drop 2 (final-svg graph)))]
     (is (= ["1" "2"] keys-in-order))))
 
+(deftest draw-dashes-against-the-real-perimeter
+  ;; resvg ignores pathLength, so a pathLength=1 dash rasterised as a dotted
+  ;; outline in every video frame. The dash must be the shape's own length.
+  (let [rect [:rect {:x 0 :y 0 :width 40 :height 10 :rx 0}]
+        [_ half] (render/apply-attrs rect {:draw 0.5})
+        [_ done] (render/apply-attrs rect {:draw 1.0})
+        [_ line] (render/apply-attrs [:line {:x1 0 :y1 0 :x2 3 :y2 4}] {:draw 0.0})
+        [_ ring] (render/apply-attrs [:circle {:cx 0 :cy 0 :r 1}] {:draw 0.25})]
+    (is (nil? (:pathLength half)))
+    (is (= 100.0 (:stroke-dasharray half)))
+    (is (= 50.0 (:stroke-dashoffset half)))
+    (is (not (contains? done :stroke-dasharray))
+        "a finished reveal is a plain stroke")
+    (is (= 5.0 (:stroke-dasharray line)))
+    (is (= 5.0 (:stroke-dashoffset line)))
+    (is (< 6.283 (:stroke-dasharray ring) 6.284))))
+
 (def portrait-graph
   "The same two nodes in a 9:16 world: a scene declares the frame it was
    authored in, and everything else follows it."

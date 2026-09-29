@@ -167,21 +167,61 @@
        (remove nil?)
        (str/join " ")))
 
+(def ^:private tau 6.283185307179586)
+
+(defn- sqrt
+  "Newton's square root. Plain arithmetic, so every host plato runs on
+   computes the same double: `Math/sqrt` is not a static on every reader
+   this file is compiled under."
+  [x]
+  (let [x (double x)]
+    (if (<= x 0.0)
+      0.0
+      (loop [g (max 1.0 x) i 0]
+        (let [g' (* 0.5 (+ g (/ x g)))]
+          (if (or (= g' g) (= i 64)) g' (recur g' (inc i))))))))
+
+(defn- stroke-length
+  "Perimeter of SVG element `a` in user units, or nil when `tag` has no closed
+   form here. A rounded rect loses (8 - 2pi) rx over its four corners."
+  [tag a]
+  (case tag
+    :rect   (let [w (double (:width a)) h (double (:height a))
+                  rx (min (double (or (:rx a) 0)) (/ w 2.0) (/ h 2.0))]
+              (- (* 2.0 (+ w h)) (* (- 8.0 tau) rx)))
+    :circle (* tau (double (:r a)))
+    :line   (let [dx (- (:x2 a) (:x1 a)) dy (- (:y2 a) (:y1 a))]
+              (sqrt (+ (* dx dx) (* dy dy))))
+    nil))
+
 (defn- draw-attrs
-  "Normalized stroke reveal (pathLength=1 so it is shape-perimeter independent)."
-  [reveal]
-  {:pathLength 1 :stroke-dasharray 1 :stroke-dashoffset (- 1.0 reveal)})
+  "Stroke reveal for element `a`, dashed against its own perimeter.
+
+   The dash is the shape's real length rather than `pathLength=1`: browsers
+   honour pathLength, but resvg and other rasterisers ignore it and draw a
+   1-unit dash, so a revealed outline came out dotted in every video frame.
+   A finished reveal carries no dash at all, which is the plain stroke both
+   kinds of reader agree on. Tags with no closed-form length keep pathLength."
+  [tag a reveal]
+  (let [reveal (double reveal)]
+    (if (>= reveal 1.0)
+      {}
+      (if-let [len (stroke-length tag a)]
+        {:stroke-dasharray len :stroke-dashoffset (* len (- 1.0 reveal))}
+        {:pathLength 1 :stroke-dasharray 1 :stroke-dashoffset (- 1.0 reveal)}))))
 
 (defn- merge-paint
   "Direct-value channels: opacity/fill/stroke, plus the draw reveal and a
-   line's endpoints. `contains?` (not truthiness) so opacity 0.0 still applies."
-  [a attrs]
-  (cond-> a
-    (contains? attrs :opacity)   (assoc :opacity (:opacity attrs))
-    (contains? attrs :fill)      (assoc :fill    (:fill attrs))
-    (contains? attrs :stroke)    (assoc :stroke  (:stroke attrs))
-    (contains? attrs :draw)      (merge (draw-attrs (:draw attrs)))
-    (contains? attrs :endpoints) (merge (zipmap [:x1 :y1 :x2 :y2] (:endpoints attrs)))))
+   line's endpoints. `contains?` (not truthiness) so opacity 0.0 still applies.
+   The reveal is measured last, against the endpoints this frame moved to."
+  [tag a attrs]
+  (let [a (cond-> a
+            (contains? attrs :opacity)   (assoc :opacity (:opacity attrs))
+            (contains? attrs :fill)      (assoc :fill    (:fill attrs))
+            (contains? attrs :stroke)    (assoc :stroke  (:stroke attrs))
+            (contains? attrs :endpoints) (merge (zipmap [:x1 :y1 :x2 :y2] (:endpoints attrs))))]
+    (cond-> a
+      (contains? attrs :draw) (merge (draw-attrs tag a (:draw attrs))))))
 
 (defn- merge-transform [a attrs center]
   (let [tf (transform-str attrs center)]
@@ -193,7 +233,7 @@
   [[tag a & children :as el] attrs]
   (if (empty? attrs)
     el
-    (let [a' (-> a (merge-paint attrs) (merge-transform attrs (center-of tag a)))]
+    (let [a' (-> (merge-paint tag a attrs) (merge-transform attrs (center-of tag a)))]
       (if (contains? attrs :text)
         [tag a' (:text attrs)]
         (into [tag a'] children)))))
