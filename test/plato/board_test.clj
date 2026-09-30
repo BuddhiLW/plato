@@ -89,3 +89,19 @@
       (is (str/includes? page "css/plato-board.css"))
       (is (str/includes? page "plato.board_island.hydrate()")))
     (is (not (str/includes? (html/deck->html without) "plato-board")))))
+
+(deftest board-math-is-typeset-beside-the-board
+  (let [with-math (assoc value :board/math ["f(x) = x" "f'(x) = 1"])
+        html (render with-math)
+        deck-of (fn [v] (deck/deck {:title "m" :slides [(deck/slide :m [:div (board/board v)])]}))]
+    (testing "each TeX line is set for KaTeX, in order (HTML-escaped; KaTeX reads the decoded text)"
+      (is (str/includes? html "<span class=\"plato-board-eq\">\\(f(x) = x\\)</span><span class=\"plato-board-eq\">\\(f&#39;(x) = 1\\)</span>")))
+    (testing "outside [data-plato-board], which the island empties when it mounts"
+      (is (< (str/index-of html "data-plato-board=") (str/index-of html "plato-board-math")))
+      (is (str/includes? html "</p></div><div class=\"plato-board-math\">")))
+    (testing "a board without math renders no math block"
+      (is (not (str/includes? (render value) "plato-board-math"))))
+    (testing "a board's math turns KaTeX on without a flag"
+      (is (html/needs-math? (deck-of with-math) {}))
+      (is (not (html/needs-math? (deck-of value) {})))
+      (is (str/includes? (html/deck->html (deck-of with-math)) "/vendor/plugin/math.js")))))

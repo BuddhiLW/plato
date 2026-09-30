@@ -106,10 +106,25 @@
           (keep #(layer/static-layer % ctx))
           (:board/layers board))))
 
+(defn math-lines
+  "The board's :board/math as display lines for the page's KaTeX: each TeX
+   line wrapped in \\( \\), which Reveal's math plugin typesets. Kind-neutral:
+   plato never asks which kind of board wrote them."
+  [board]
+  (when-let [lines (seq (:board/math board))]
+    (into [:div.plato-board-math]
+          (map (fn [tex] [:span.plato-board-eq (str "\\(" tex "\\)")]))
+          lines)))
+
 (defmethod content/render :board [value]
   ;; The static plot, plus the board value itself as EDN in a data attribute,
   ;; minus the frame: the island recomputes every sample from the kernel, so
   ;; shipping them twice would only weigh the page down.
-  [:div.plato-board {:data-plato-board (pr-str (update value :board dissoc :board/frame))}
-   (static-svg value)
-   [:p.plato-board-label (:board/label (:board value))]])
+  ;;
+  ;; The math sits OUTSIDE [data-plato-board]: the island empties that element
+  ;; when it mounts, and KaTeX typesets the page once, at Reveal's start.
+  (cond-> [:div.plato-board-figure
+           [:div.plato-board {:data-plato-board (pr-str (update value :board dissoc :board/frame))}
+            (static-svg value)
+            [:p.plato-board-label (:board/label (:board value))]]]
+    (seq (:board/math (:board value))) (conj (math-lines (:board value)))))

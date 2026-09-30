@@ -185,6 +185,19 @@
   (boolean (some (fn [slide] (some board-content? (tree-seq coll? seq (:content slide))))
                  (deck/leaf-slides deck))))
 
+(defn needs-math?
+  "Does the page carry KaTeX? When the opts or the deck say {:math? true}, or
+   when any board brings its mathematics as TeX (:board/math): the board sets
+   those lines beside its plot, and a flag its author could forget would ship
+   them as raw TeX. One function, so the page and its Reveal config agree."
+  [deck opts]
+  (boolean
+   (or (:math? opts) (:math? deck)
+       (some (fn [slide]
+               (some #(and (board-content? %) (seq (get-in % [:board :board/math])))
+                     (tree-seq coll? seq (:content slide))))
+             (deck/leaf-slides deck)))))
+
 (def katex-runtime
   "Where a page finds KaTeX, relative to :asset-base: the katex npm package's
    dist tree, vendored by `bb assets`. Reveal's KaTeX plugin reads the path
@@ -198,10 +211,9 @@
    this, so the live shell and the export point at the same copy. A deck may
    set its own :katex options (delimiters, macros); only :local is filled in."
   [deck opts]
-  (let [{:keys [asset-base math?]} (merge default-opts opts)
-        math? (boolean (or math? (:math? deck)))]
+  (let [{:keys [asset-base]} (merge default-opts opts)]
     (cond-> (or (:config deck) {})
-      math? (update :katex #(merge {:local (str asset-base (:local katex-runtime))} %)))))
+      (needs-math? deck opts) (update :katex #(merge {:local (str asset-base (:local katex-runtime))} %)))))
 
 (defn needs-fit-runtime?
   "Does this deck have to carry plato.fit to render correctly?
@@ -280,13 +292,13 @@
   "Deck -> the whole [:html ...] document. opts: :asset-base :theme :title
    :description :stylesheets :scripts :math? :fit? :live-scenes? :after-slides.
 
-   :math? is read off the deck as well as the opts: a deck that declares
-   {:math? true} has said it needs the plugin, and the live shell reads the
-   same key, so the two render targets cannot disagree about it."
+   :math? is read off the deck as well as the opts (see needs-math?): a deck
+   that declares {:math? true}, or carries a board with :board/math, has said
+   it needs the plugin, so the two render targets cannot disagree about it."
   ([deck] (deck-hiccup deck {}))
   ([deck opts]
    (let [opts (-> (merge default-opts opts)
-                  (assoc :math? (boolean (or (:math? opts) (:math? deck)))))]
+                  (assoc :math? (needs-math? deck opts)))]
      [:html {:lang (or (:lang deck) "en")}
       (head-hiccup deck opts)
       (body-hiccup deck opts)])))

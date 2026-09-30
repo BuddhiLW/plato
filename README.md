@@ -310,7 +310,9 @@ returns (a function over slider parameters whose calculus raster compiled to Web
 renders it as a static plot of its initial frame; a page whose deck carries a board also links
 `vendor/plato-board/main.js` and `css/plato-board.css`, and the island turns the plot into a
 live board: drag the tangent point, drag the integral's bounds, move the sliders, and the wasm
-kernel refills f, f' and the running integral on every move.
+kernel refills f, f' and the running integral on every move. When the board carries
+`:board/math` (TeX lines; desargues writes Emmy's f and f' there), they are typeset under the
+board by the page's KaTeX, which such a board switches on by itself.
 
 ~~~clojure
 (require '[desargues.board :as db] '[plato.board :as board] '[plato.deck :as deck])

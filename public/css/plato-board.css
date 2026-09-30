@@ -10,6 +10,13 @@
 .plato-board { margin: 0.4em auto 0; max-width: 900px; text-align: left; }
 .plato-board-label { font-size: 0.5em; text-align: center; margin: 0.3em 0 0; }
 
+/* The board's :board/math, typeset by the page's KaTeX: one row, under the
+   controls, outside the element the island mounts into. */
+.plato-board-math {
+  display: flex; gap: 2.2em; justify-content: center; flex-wrap: wrap;
+  font-size: 0.5em; margin: 0.35em 0 0;
+}
+
 .plato-board-static { display: block; border-radius: 6px; background: rgba(255,255,255,0.03); }
 .plato-board-static .axis { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; }
 .plato-board-static .area { fill: #1cd14b; fill-opacity: 0.25; stroke: none; }
