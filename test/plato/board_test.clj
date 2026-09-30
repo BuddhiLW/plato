@@ -105,3 +105,33 @@
       (is (html/needs-math? (deck-of with-math) {}))
       (is (not (html/needs-math? (deck-of value) {})))
       (is (str/includes? (html/deck->html (deck-of with-math)) "/vendor/plugin/math.js")))))
+
+;; A figure: one configuration (n = 1). A, B free; P at infinity (a meet of
+;; parallels); the check reads |AB|.
+(def figure
+  {:board/id :fig
+   :board/kind :construction
+   :board/kernel {:wasm "./vendor/boards/fig.wasm" :export "fig"}
+   :board/label "a figure"
+   :board/window {:x [-4 4] :y [-3 3] :n 1}
+   :board/params [{:id :inpt0x :min -4 :max 4 :init 0 :control :point}]
+   :board/outputs [:ax :ay :bx :by :px :py :ck]
+   :board/layers [{:layer :segment :a [:ax :ay] :b [:bx :by]}
+                  {:layer :line :a [:ax :ay] :b [:bx :by]}
+                  {:layer :point :at [:bx :by] :label "B"}
+                  {:layer :point :at [:px :py] :label "P"}
+                  {:layer :handle :at [:ax :ay] :label "A" :drives {:x :inpt0x :y :inpt0y}}
+                  {:layer :value :of :ck :label "|AB|"}]
+   :board/probes {}
+   :board/frame {:ax [0.0] :ay [0.0] :bx [3.0] :by [0.0] :px [##Inf] :py [1.0e300] :ck [3.0]}})
+
+(deftest figure-layers-draw-one-configuration
+  (let [html (render figure)]
+    (is (board/board? figure) "n = 1 is a board")
+    (testing "segment, extended line, labelled point and handle"
+      (is (str/includes? html "class=\"segment\""))
+      (is (str/includes? html "class=\"line\""))
+      (is (str/includes? html ">B</text>"))
+      (is (str/includes? html "class=\"handle\"")))
+    (testing "a point at infinity is not drawn"
+      (is (not (str/includes? html ">P</text>"))))))

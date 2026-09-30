@@ -14,7 +14,7 @@
    are the only state. Same lifecycle as plato.scene-island: the attribute is
    removed on hydrate so a second call is a no-op, and the bundle hydrates
    itself on load when the document is already parsed."
-  (:require ["mafs" :refer [Mafs Coordinates Polyline Polygon MovablePoint Line Theme]]
+  (:require ["mafs" :refer [Mafs Coordinates Polyline Polygon MovablePoint Line Point Text Theme]]
             [cljs.reader :as reader]
             [plato.board.geom :as geom]
             [reagent.core :as r]
@@ -43,15 +43,18 @@
 (defn- sample
   "Call the kernel over the window and copy every output out:
    {:grid {:x0 :h :xs} :arrays {output Float64Array}}. The board owns the
-   memory slice from `base`, so boards sharing a kernel never share scratch."
-  [{:keys [call ^js memory]} base outputs {[x0 x1] :x n :n} param-values]
-  (let [stride (* 8 n)
+   memory slice from `base`, so boards sharing a kernel never share scratch.
+   The kernel sweeps the window's :sweep domain (default its :x range) in n
+   samples; n = 1 is one call at the domain's start."
+  [{:keys [call ^js memory]} base outputs {:keys [x n sweep]} param-values]
+  (let [[s0 s1] (or sweep x)
+        stride (* 8 n)
         ptrs (map #(+ base (* % stride)) (range (count outputs)))
-        h (/ (- x1 x0) (dec n))]
-    (apply call (concat ptrs [n x0 h] param-values))
+        h (if (> n 1) (/ (- s1 s0) (dec n)) 0)]
+    (apply call (concat ptrs [n s0 h] param-values))
     (let [m (js/Float64Array. (.-buffer memory))
           arrays (zipmap outputs (map (fn [p] (.slice m (/ p 8) (+ (/ p 8) n))) ptrs))]
-      {:grid {:x0 x0 :h h :xs (get arrays :xs (get arrays (first outputs)))}
+      {:grid {:x0 s0 :h h :xs (get arrays :xs (get arrays (first outputs)))}
        :arrays arrays})))
 
 (defn- polyline [xs ys]
@@ -122,6 +125,104 @@
     [:span {:style {:color (theme (:color layer) :green)}}
      "∫ f dx over [" (fmt lo) ", " (fmt hi) "] = " (fmt (geom/integral grid (get arrays of) lo hi))]))
 
+;; ---- figures: points and lines over one configuration ----------------------
+;; Mirrors plato.board.layer's figure layers. A point is a pair of output keys;
+;; a point at infinity is not drawn, and neither is anything through it.
+
+(defn- figure-pts [arrays pts]
+  (let [ps (map #(geom/point arrays %) pts)]
+    (when (every? geom/finite? ps) ps)))
+
+(defn- label-at [[x y] label c]
+  (when label [:> Text {:x x :y y :attach "ne" :size 18 :color c} label]))
+
+(defmethod live-layer :point [{:keys [at label] :as layer} {:keys [arrays]}]
+  (when-let [[p] (figure-pts arrays [at])]
+    (let [c (theme (:color layer) :yellow)]
+      (list [:> Point {:x (first p) :y (second p) :color c}]
+            (label-at p label c)))))
+
+(defmethod live-layer :segment [{:keys [a b style] :as layer} {:keys [arrays]}]
+  (when-let [[pa pb] (figure-pts arrays [a b])]
+    [:> (.-Segment ^js Line) {:point1 (clj->js pa) :point2 (clj->js pb)
+                              :color (theme (:color layer) :blue)
+                              :weight (or (:weight layer) 2.5)
+                              :style (if (= style :dashed) "dashed" "solid")}]))
+
+(defmethod live-layer :line [{:keys [a b style] :as layer} {:keys [arrays]}]
+  (when-let [[pa pb] (figure-pts arrays [a b])]
+    (when (not= pa pb)
+      [:> (.-ThroughPoints ^js Line) {:point1 (clj->js pa) :point2 (clj->js pb)
+                                      :color (theme (:color layer) :violet)
+                                      :weight (or (:weight layer) 1.5)
+                                      :style (if (= style :dashed) "dashed" "solid")}])))
+
+(defmethod live-layer :polygon [{:keys [pts] :as layer} {:keys [arrays]}]
+  (when-let [ps (figure-pts arrays pts)]
+    [:> Polygon {:points (clj->js ps) :color (theme (:color layer) :blue)
+                 :fillOpacity (or (:fill-opacity layer) 0.18) :weight 2}]))
+
+(defmethod live-layer :path [{:keys [pts style] :as layer} {:keys [arrays]}]
+  (when-let [ps (figure-pts arrays pts)]
+    [:> Polyline {:points (clj->js ps) :color (theme (:color layer) :blue)
+                  :weight (or (:weight layer) 2)
+                  :strokeStyle (if (= style :dashed) "dashed" "solid")}]))
+
+(defmethod live-layer :trace [{:keys [of style] :as layer} {:keys [arrays]}]
+  (let [ps (geom/trace arrays of)]
+    (when (next ps)
+      [:> Polyline {:points (clj->js ps) :color (theme (:color layer) :blue)
+                    :weight (or (:weight layer) 2)
+                    :strokeStyle (if (= style :dashed) "dashed" "solid")}])))
+
+(defn- clamp-to [{[x0 x1] :x [y0 y1] :y} [x y]]
+  [(max x0 (min x1 x)) (max y0 (min y1 y))])
+
+(defmethod live-layer :handle [{:keys [at along drives label] :as layer}
+                               {:keys [arrays set-params! window]}]
+  ;; A draggable point. Free, it writes its two coordinate params; :along a
+  ;; line [A B], it is held on AB and writes its position s (X = A + s(B-A)).
+  (when-let [[p] (figure-pts arrays [at])]
+    (let [c (theme (:color layer) :pink)
+          [a b] (when along (map #(geom/point arrays %) along))
+          project (fn [[x y]]
+                    (let [[ax ay] a [bx by] b dx (- bx ax) dy (- by ay)
+                          d2 (+ (* dx dx) (* dy dy))]
+                      (if (zero? d2) 0 (/ (+ (* (- x ax) dx) (* (- y ay) dy)) d2))))]
+      (list
+       [:> MovablePoint
+        {:point (clj->js p) :color c
+         :constrain (fn [pt]
+                      (let [q (clamp-to window [(aget pt 0) (aget pt 1)])]
+                        (if along
+                          (let [s (project q) [ax ay] a [bx by] b]
+                            #js [(+ ax (* s (- bx ax))) (+ ay (* s (- by ay)))])
+                          (clj->js q))))
+         :onMove (fn [pt]
+                   (let [q [(aget pt 0) (aget pt 1)]]
+                     (set-params! (if along
+                                    {(:s drives) (project q)}
+                                    {(:x drives) (first q) (:y drives) (second q)}))))}]
+       (label-at p label c)))))
+
+(defn- held?
+  "Did value v survive? Compared with its baseline v0 at a tolerance fit for
+   the wasm kernel's transcendental approximations (about 1e-7)."
+  [v v0]
+  (<= (js/Math.abs (- v v0)) (* 1e-5 (max 1 (js/Math.abs v0)))))
+
+(defmethod readout :value [{:keys [of against label invariant?]} {:keys [arrays baseline]}]
+  ;; An invariant is read against its reference (:against, e.g. the original
+  ;; figure's length for its image's) or, without one, against its own value
+  ;; at the params' initial state.
+  (let [v (geom/value arrays of)
+        v0 (if against (geom/value arrays against) (geom/value baseline of))
+        kept? (held? v v0)]
+    [:span {:class (str "plato-board-value" (when invariant? (if kept? " kept" " broken")))}
+     label " = " (fmt v)
+     (when against [:span.was " (was " (fmt v0) ")"])
+     (when invariant? (if kept? " ✓" " ✗"))]))
+
 ;; ---------------------------------------------------------------------------
 ;; The board
 
@@ -135,16 +236,28 @@
             :on-change #(swap! state assoc-in [:params id]
                                (js/parseFloat (.. % -target -value)))}]])
 
+(defn- slider-param?
+  "Is p a slider? A param a layer drags instead (a figure's free point owns
+   its coordinates as params) says so with :control, and gets no slider."
+  [p]
+  (contains? #{nil :slider} (:control p)))
+
 (defn- board-view [k base {:keys [board height]}]
   (let [{:board/keys [window params probes outputs layers label]} board
         {[x0 x1] :x [y0 y1] :y} window
-        state (r/atom {:params (into {} (map (juxt :id :init)) params)
-                       :probes probes})
-        move! (fn [probe v] (swap! state assoc-in [:probes probe] v))]
+        init (into {} (map (juxt :id :init)) params)
+        state (r/atom {:params init :probes probes})
+        move! (fn [probe v] (swap! state assoc-in [:probes probe] v))
+        set-params! (fn [m] (swap! state update :params merge m))
+        ;; Every output at the params' initial values: what a readout
+        ;; compares against to say whether a quantity survived the drag.
+        baseline (:arrays (sample k base outputs window (map #(get init (:id %)) params)))]
     (fn []
       (let [st @state
             ctx (assoc (sample k base outputs window (map #(get-in st [:params (:id %)]) params))
-                       :probes (:probes st) :move! move!)]
+                       :probes (:probes st) :move! move!
+                       :params (:params st) :set-params! set-params!
+                       :baseline baseline :window window)]
         [:div.plato-board-live
          (into [:> Mafs {:height height :pan false :zoom false
                          :viewBox #js {:x #js [x0 x1] :y #js [y0 y1]}
@@ -153,7 +266,7 @@
                (mapcat (fn [l] (let [e (live-layer l ctx)] (if (seq? e) e (when e [e])))))
                layers)
          (into [:div.plato-board-readout [:span label]] (keep #(readout % ctx)) layers)
-         (into [:div.plato-board-controls] (map #(slider state %)) params)]))))
+         (into [:div.plato-board-controls] (map #(slider state %)) (filter slider-param? params))]))))
 
 ;; ---------------------------------------------------------------------------
 ;; Hydration

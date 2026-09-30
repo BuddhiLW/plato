@@ -39,3 +39,47 @@
     (vec (concat [[lo 0] [lo (at grid ys lo)]]
                  inner
                  [[hi (at grid ys hi)] [hi 0]]))))
+
+;; ---------------------------------------------------------------------------
+;; Figures: a board of one configuration (n = 1), where every output is one
+;; value and a point is a pair of output keys [kx ky].
+
+(defn value
+  "Output k's value in a one-configuration board (its first sample)."
+  [arrays k]
+  (aget (get arrays k) 0))
+
+(defn point
+  "The point named by output keys [kx ky]."
+  [arrays [kx ky]]
+  [(value arrays kx) (value arrays ky)])
+
+(defn- finite-num? [x]
+  #?(:cljs (js/isFinite x) :default (Double/isFinite (double x))))
+
+(defn finite?
+  "Is p a drawable point? A meet of parallel lines lies at infinity, and
+   comes out of the kernel as a huge, infinite or NaN coordinate."
+  [[x y]]
+  (and (finite-num? x) (finite-num? y) (< (abs x) 1e6) (< (abs y) 1e6)))
+
+(defn line-ends
+  "Two points on the line through a and b, far enough apart to cross the
+   whole window: what the static plot draws for an infinite line."
+  [[ax ay :as a] [bx by] {[x0 x1] :x [y0 y1] :y}]
+  (let [dx (- bx ax) dy (- by ay)
+        len (#?(:cljs js/Math.sqrt :default Math/sqrt) (+ (* dx dx) (* dy dy)))
+        reach (* 2 (+ (- x1 x0) (- y1 y0)))]
+    (if (zero? len)
+      [a a]
+      (let [ux (/ dx len) uy (/ dy len)]
+        [[(- ax (* reach ux)) (- ay (* reach uy))]
+         [(+ ax (* reach ux)) (+ ay (* reach uy))]]))))
+
+(defn trace
+  "Every sample of the point [kx ky] as [[x y] ...], a curve when the point
+   depends on the swept parameter, dropping samples at infinity."
+  [arrays [kx ky]]
+  (let [xs (get arrays kx) ys (get arrays ky)]
+    (into [] (comp (map (fn [i] [(aget xs i) (aget ys i)])) (filter finite?))
+          (range (alength xs)))))

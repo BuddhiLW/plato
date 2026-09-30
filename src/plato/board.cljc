@@ -30,10 +30,12 @@
 (defn kernel-ref? [k]
   (and (map? k) (string? (:wasm k)) (string? (:export k))))
 
-(defn window? [{[x0 x1] :x [y0 y1] :y n :n}]
+(defn window?
+  "n = 1 is one configuration per call (a figure); a sweep has more."
+  [{[x0 x1] :x [y0 y1] :y n :n}]
   (and (number? x0) (number? x1) (< x0 x1)
        (number? y0) (number? y1) (< y0 y1)
-       (integer? n) (> n 1)))
+       (integer? n) (pos? n)))
 
 (defn param? [{:keys [id min max init]}]
   (and (keyword? id) (number? min) (number? max) (number? init) (<= min init max)))
@@ -79,11 +81,13 @@
 
 (defn- context
   "What every static layer reads: the grid, the frame as arrays, and the
-   world -> SVG projection."
+   world -> SVG projection. A one-configuration board (n = 1, a figure) has
+   no step: h is 0."
   [{:board/keys [window frame outputs probes]} height]
   (let [{[x0 x1] :x [y0 y1] :y n :n} window
         pad (- y1 y0)]
-    {:grid {:x0 x0 :h (/ (- x1 x0) (dec n)) :xs (double-array (:xs frame (get frame (first outputs))))}
+    {:grid {:x0 x0 :h (if (> n 1) (/ (- x1 x0) (dec n)) 0)
+            :xs (double-array (:xs frame (get frame (first outputs))))}
      :arrays (into {} (map (fn [k] [k (double-array (get frame k))])) outputs)
      :project (fn [[x y]] [(* plot-width (/ (- x x0) (- x1 x0)))
                            (* height (/ (- y1 y) (- y1 y0)))])

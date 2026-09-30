@@ -62,3 +62,62 @@
                  :points (points-attr project [[x0 (clamp (+ fp (* m (- x0 p))))]
                                                [x1 (clamp (+ fp (* m (- x1 p))))]])}]
      [:circle {:cx sx :cy sy :r 7 :fill c}]]))
+
+;; ---- figures: points and lines over one configuration ---------------------
+;; A figure layer names points as [kx ky] output pairs (plato.board.geom/point).
+;; A point at infinity is not drawn, and neither is anything through it.
+
+(defn- figure-pts [arrays pts]
+  (let [ps (map #(geom/point arrays %) pts)]
+    (when (every? geom/finite? ps) ps)))
+
+(defmethod static-layer :point [{:keys [at label] :as layer} {:keys [arrays project]}]
+  (when-let [[p] (figure-pts arrays [at])]
+    (let [[sx sy] (project p) c (color (:color layer) :yellow)]
+      [:g {:class "point"}
+       [:circle {:cx sx :cy sy :r 5 :fill c}]
+       (when label [:text {:x (+ sx 9) :y (- sy 9) :fill c :font-size 20} label])])))
+
+(defmethod static-layer :handle [{:keys [at label] :as layer} {:keys [arrays project]}]
+  ;; A draggable point, drawn as a ringed point so it reads as one to grab.
+  (when-let [[p] (figure-pts arrays [at])]
+    (let [[sx sy] (project p) c (color (:color layer) :pink)]
+      [:g {:class "handle"}
+       [:circle {:cx sx :cy sy :r 11 :fill c :fill-opacity 0.25}]
+       [:circle {:cx sx :cy sy :r 6 :fill c}]
+       (when label [:text {:x (+ sx 11) :y (- sy 11) :fill c :font-size 20} label])])))
+
+(defmethod static-layer :segment [{:keys [a b style] :as layer} {:keys [arrays project]}]
+  (when-let [ps (figure-pts arrays [a b])]
+    [:polyline {:class "segment" :fill "none" :stroke (color (:color layer) :blue)
+                :stroke-width (or (:weight layer) 2.5)
+                :stroke-dasharray (when (= style :dashed) "6 5")
+                :points (points-attr project ps)}]))
+
+(defmethod static-layer :line [{:keys [a b style] :as layer} {:keys [arrays project window]}]
+  (when-let [[pa pb] (figure-pts arrays [a b])]
+    [:polyline {:class "line" :fill "none" :stroke (color (:color layer) :violet)
+                :stroke-width (or (:weight layer) 1.5)
+                :stroke-dasharray (when (= style :dashed) "6 5")
+                :points (points-attr project (geom/line-ends pa pb window))}]))
+
+(defmethod static-layer :polygon [{:keys [pts] :as layer} {:keys [arrays project]}]
+  (when-let [ps (figure-pts arrays pts)]
+    (let [c (color (:color layer) :blue)]
+      [:polygon {:class "polygon" :fill c :fill-opacity (or (:fill-opacity layer) 0.18)
+                 :stroke c :stroke-width 2 :points (points-attr project ps)}])))
+
+(defmethod static-layer :path [{:keys [pts style] :as layer} {:keys [arrays project]}]
+  (when-let [ps (figure-pts arrays pts)]
+    [:polyline {:class "path" :fill "none" :stroke (color (:color layer) :blue)
+                :stroke-width (or (:weight layer) 2)
+                :stroke-dasharray (when (= style :dashed) "6 5")
+                :points (points-attr project ps)}]))
+
+(defmethod static-layer :trace [{:keys [of style] :as layer} {:keys [arrays project]}]
+  (let [ps (geom/trace arrays of)]
+    (when (next ps)
+      [:polyline {:class "trace" :fill "none" :stroke (color (:color layer) :blue)
+                  :stroke-width (or (:weight layer) 2)
+                  :stroke-dasharray (when (= style :dashed) "6 5")
+                  :points (points-attr project ps)}])))
