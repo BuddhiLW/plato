@@ -47,6 +47,14 @@
           :output-dir "public/vendor/plato-scene"
           :asset-path "/vendor/plato-scene"
           :modules {:main {:entries [plato.scene-island]}}}
+  ;; The board island on its own, for a prerendered page: every :board value
+  ;; (plato.board, compiled by desargues.board) hydrates into a live Mafs board
+  ;; over its WebAssembly kernel. Mafs and React ride in this bundle and in no
+  ;; other, so a deck without a board never downloads them.
+  :board {:target :browser
+          :output-dir "public/vendor/plato-board"
+          :asset-path "/vendor/plato-board"
+          :modules {:main {:entries [plato.board-island]}}}
   ;; Reveal's highlight plugin over highlight.js core and the languages the
   ;; decks use, for a prerendered page. The shell registers the same
   ;; plato.highlight; plato.html/plugins names this script.

@@ -14,8 +14,8 @@
 
   assets  {:doc "Vendor the reveal.js dist into public/vendor"
            :task (build! "assets")}
-  bundles {:doc "Release-build the scripts a prerendered page links: plato-fit, plato-scene, plato-highlight"
-           :task (shell "npx shadow-cljs release fit scene highlight")}
+  bundles {:doc "Release-build the scripts a prerendered page links: plato-fit, plato-scene, plato-board, plato-highlight"
+           :task (shell "npx shadow-cljs release fit scene board highlight")}
   site    {:doc "Prerender the site decks and their assets into dist/site"
            :task (build! "site")}
   build   {:doc "assets, bundles, site — the tree GitHub Pages publishes"

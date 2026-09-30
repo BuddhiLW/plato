@@ -1,0 +1,153 @@
+/* plato-board — the board island's styles. Linked by plato.html only on a page
+   whose deck carries a :board (plato.html/needs-board-runtime?).
+
+   Two parts: the static plot (.plato-board-static), what the served bytes
+   show before any script; and the live board (Mafs' own core stylesheet,
+   vendored below, plus the readout and slider row). Reveal lays a slide out
+   in a fixed box and CSS-scales it, so the board has a fixed height and the
+   controls sit in one row under it: a slide's fit is decided at build time. */
+
+.plato-board { margin: 0.4em auto 0; max-width: 900px; text-align: left; }
+.plato-board-label { font-size: 0.5em; text-align: center; margin: 0.3em 0 0; }
+
+.plato-board-static { display: block; border-radius: 6px; background: rgba(255,255,255,0.03); }
+.plato-board-static .axis { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1; }
+.plato-board-static .area { fill: #1cd14b; fill-opacity: 0.25; stroke: none; }
+.plato-board-static .df { fill: none; stroke: #ff5cb6; stroke-width: 2; stroke-dasharray: 6 5; }
+.plato-board-static .f { fill: none; stroke: #58a6ff; stroke-width: 3; }
+.plato-board-static .tangent { fill: none; stroke: #ff8a3d; stroke-width: 2; }
+.plato-board-static .probe { fill: #ff8a3d; }
+
+.plato-board-live .MafsView { border-radius: 6px; }
+.plato-board-readout {
+  display: flex; gap: 1.4em; justify-content: center; flex-wrap: wrap;
+  font-size: 0.5em; margin: 0.35em 0 0.2em; font-variant-numeric: tabular-nums;
+}
+.plato-board-controls { display: flex; gap: 1.2em; justify-content: center; font-size: 0.45em; }
+.plato-board-slider { display: flex; flex-direction: column; align-items: center; gap: 0.2em; }
+.plato-board-slider span { font-variant-numeric: tabular-nums; min-width: 7em; text-align: center; }
+.plato-board-slider input { width: 11em; }
+
+/* ---- mafs 0.21.0 core.css, vendored so the page reaches no CDN ---------- */
+.MafsView {
+  display: block;
+  background: var(--mafs-bg);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  touch-action: none;
+  outline: 0;
+
+  --mafs-bg: black;
+  --mafs-fg: white;
+
+  --mafs-origin-color: var(--mafs-fg);
+  --mafs-line-color: #555;
+  --mafs-line-stroke-dash-style: 4, 3;
+  --mafs-axis-stroke-width: 1px;
+  --grid-line-subdivision-color: #222;
+
+  --mafs-red: #f11d0e;
+  --mafs-orange: #f14e0e;
+  --mafs-yellow: #ffe44a;
+  --mafs-green: #15e272;
+  --mafs-blue: #58a6ff;
+  --mafs-indigo: #7c58ff;
+  --mafs-violet: #ae58ff;
+  --mafs-pink: #ee00ab;
+}
+
+.MafsView text {
+  fill: var(--mafs-fg);
+  cursor: default;
+}
+
+.MafsView path {
+  stroke: var(--mafs-fg);
+}
+
+.MafsView:focus-visible {
+  border-radius: 5px;
+  outline: 3px solid #58a6ff;
+}
+
+@supports not selector(:focus-visible) {
+  .MafsView:focus {
+    border-radius: 5px;
+    outline: 3px solid #58a6ff;
+  }
+}
+
+.mafs-shadow {
+  paint-order: stroke;
+  stroke-width: 3px;
+  stroke: var(--mafs-bg);
+  stroke-opacity: 0.75;
+  stroke-linejoin: round;
+}
+
+.mafs-movable-point {
+  cursor: grab;
+  touch-action: none;
+}
+
+.mafs-movable-point-dragging {
+  cursor: grabbing;
+}
+
+.mafs-movable-point:focus {
+  outline: 0;
+}
+
+.mafs-movable-point * {
+  fill: none;
+  stroke: none;
+}
+
+.mafs-movable-point-hitbox {
+  fill: transparent;
+}
+
+.mafs-movable-point-focus {
+  stroke: var(--movable-point-color);
+  stroke-width: 2;
+  stroke-opacity: 0;
+  fill: none;
+  transition: stroke-opacity 0.2s ease;
+}
+
+.mafs-movable-point-ring {
+  fill: var(--movable-point-color);
+  fill-opacity: 0.25;
+  stroke: none;
+  transition: r 0.2s ease;
+}
+
+.mafs-movable-point-point {
+  fill: var(--movable-point-color);
+  transition: r 0.2s ease;
+}
+
+/* Hover */
+
+.mafs-movable-point:hover .mafs-movable-point-point,
+.mafs-movable-point:focus-visible .mafs-movable-point-point {
+  r: calc(var(--movable-point-ring-size) - 2px);
+}
+
+.mafs-movable-point:hover .mafs-movable-point-ring,
+.mafs-movable-point:focus-visible .mafs-movable-point-ring {
+  r: calc(var(--movable-point-ring-size) + 3px);
+}
+
+.mafs-movable-point.mafs-movable-point-dragging .mafs-movable-point-ring {
+  r: var(--movable-point-ring-size);
+}
+
+/* Focus */
+
+.mafs-movable-point:focus-visible .mafs-movable-point-focus {
+  stroke-opacity: 1;
+}

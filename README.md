@@ -303,8 +303,24 @@ under `vendor/katex` rather than a CDN; it is off by default because that copy i
 script a page can carry, and a page without a formula should not carry it — a deck that declares
 `{:math? true}` gets it without the flag, in the browser shell too.
 `--live-scenes` links the scene island so Desargues scenes play and scrub in the exported page
-instead of showing their final frame; `--description` sets the page's meta description. From
-the REPL the same thing is a function call:
+instead of showing their final frame; `--description` sets the page's meta description.
+
+A `:board` needs no flag. `plato.board/board` takes the value `desargues.board/compile-board!`
+returns (a function over slider parameters whose calculus raster compiled to WebAssembly) and
+renders it as a static plot of its initial frame; a page whose deck carries a board also links
+`vendor/plato-board/main.js` and `css/plato-board.css`, and the island turns the plot into a
+live board: drag the tangent point, drag the integral's bounds, move the sliders, and the wasm
+kernel refills f, f' and the running integral on every move.
+
+~~~clojure
+(require '[desargues.board :as db] '[plato.board :as board] '[plato.deck :as deck])
+
+(def wave (db/compile-board! {:id :wave :f '(+ (* a (sin (* b x))) (* c (* x x)))
+                              :params [{:id 'a :min -2 :max 2 :init 1} ...]}))
+(deck/slide :wave [:div (board/board wave)])
+~~~
+
+From the REPL the same thing is a function call:
 
 ~~~clojure
 (require '[plato.html :as html] '[plato.markdown :as markdown])
