@@ -17,6 +17,7 @@
   (:require ["mafs" :refer [Mafs Coordinates Polyline Polygon MovablePoint Line Point Text Theme]]
             [cljs.reader :as reader]
             [plato.board.geom :as geom]
+            [plato.board.view :as view]
             [reagent.core :as r]
             [reagent.dom.client :as rdc]))
 
@@ -178,31 +179,39 @@
 (defn- clamp-to [{[x0 x1] :x [y0 y1] :y} [x y]]
   [(max x0 (min x1 x)) (max y0 (min y1 y))])
 
-(defmethod live-layer :handle [{:keys [at along drives label] :as layer}
+(defmethod live-layer :handle [{:keys [at along around drives label] :as layer}
                                {:keys [arrays set-params! window]}]
   ;; A draggable point. Free, it writes its two coordinate params; :along a
-  ;; line [A B], it is held on AB and writes its position s (X = A + s(B-A)).
+  ;; line [A B], it is held on AB and writes its position s (X = A + s(B-A));
+  ;; :around [O P], it is held on the circle about O through P and writes
+  ;; its angle.
   (when-let [[p] (figure-pts arrays [at])]
     (let [c (theme (:color layer) :pink)
           [a b] (when along (map #(geom/point arrays %) along))
+          [o q0] (when around (map #(geom/point arrays %) around))
           project (fn [[x y]]
                     (let [[ax ay] a [bx by] b dx (- bx ax) dy (- by ay)
                           d2 (+ (* dx dx) (* dy dy))]
-                      (if (zero? d2) 0 (/ (+ (* (- x ax) dx) (* (- y ay) dy)) d2))))]
+                      (if (zero? d2) 0 (/ (+ (* (- x ax) dx) (* (- y ay) dy)) d2))))
+          angle (fn [[x y]] (let [[ox oy] o] (js/Math.atan2 (- y oy) (- x ox))))
+          radius (when around (let [[ox oy] o [qx qy] q0] (js/Math.hypot (- qx ox) (- qy oy))))]
       (list
        [:> MovablePoint
         {:point (clj->js p) :color c
          :constrain (fn [pt]
                       (let [q (clamp-to window [(aget pt 0) (aget pt 1)])]
-                        (if along
-                          (let [s (project q) [ax ay] a [bx by] b]
-                            #js [(+ ax (* s (- bx ax))) (+ ay (* s (- by ay)))])
-                          (clj->js q))))
+                        (cond
+                          along (let [s (project q) [ax ay] a [bx by] b]
+                                  #js [(+ ax (* s (- bx ax))) (+ ay (* s (- by ay)))])
+                          around (let [t (angle q) [ox oy] o]
+                                   #js [(+ ox (* radius (js/Math.cos t))) (+ oy (* radius (js/Math.sin t)))])
+                          :else (clj->js q))))
          :onMove (fn [pt]
                    (let [q [(aget pt 0) (aget pt 1)]]
-                     (set-params! (if along
-                                    {(:s drives) (project q)}
-                                    {(:x drives) (first q) (:y drives) (second q)}))))}]
+                     (set-params! (cond
+                                    along {(:s drives) (project q)}
+                                    around {(:angle drives) (angle q)}
+                                    :else {(:x drives) (first q) (:y drives) (second q)}))))}]
        (label-at p label c)))))
 
 (defn- held?
@@ -226,9 +235,33 @@
 ;; ---------------------------------------------------------------------------
 ;; The board
 
-(defn- slider [state {:keys [id label min max step]}]
+(defn- play-button
+  "A button that sweeps param p across its range, min to max and round
+   again, once every :period seconds (default 6), while it plays."
+  [state {:keys [id min max period] :or {period 6}}]
+  (let [playing (r/atom false)
+        span (- max min)
+        run (fn run [t0 v0]
+              (fn [now]
+                (when @playing
+                  (let [v (+ min (mod (+ (- v0 min) (* span (/ (- now t0) (* 1000 period)))) span))]
+                    (swap! state assoc-in [:params id] v)
+                    (js/requestAnimationFrame (run t0 v0))))))]
+    (fn []
+      [:button.plato-board-play
+       {:type "button" :aria-label (if @playing "pause" "play")
+        :on-key-down #(.stopPropagation %)
+        :on-click (fn []
+                    (swap! playing not)
+                    (when @playing
+                      (js/requestAnimationFrame
+                       (run (js/performance.now) (get-in @state [:params id])))))}
+       (if @playing "❚❚" "▶")])))
+
+(defn- slider [state {:keys [id label min max step play] :as p}]
   [:label.plato-board-slider
    [:span (or label (name id)) " = " (fmt (get-in @state [:params id]))]
+   (when play [play-button state p])
    [:input {:type "range" :min min :max max :step (or step (/ (- max min) 200))
             :value (get-in @state [:params id])
             ;; Arrow keys on a focused slider move the slider, not the deck.
@@ -238,12 +271,41 @@
 
 (defn- slider-param?
   "Is p a slider? A param a layer drags instead (a figure's free point owns
-   its coordinates as params) says so with :control, and gets no slider."
+   its coordinates as params; a 3D board's camera is orbited) says so with
+   :control, and gets no slider."
   [p]
   (contains? #{nil :slider} (:control p)))
 
+(defn- orbit-handlers
+  "Pointer handlers that orbit a 3D board's camera: a drag on the board,
+   off any draggable point, turns the :control :orbit params, yaw with the
+   horizontal motion and pitch with the vertical, each held in its range.
+   nil when the board has no such params."
+  [state params]
+  (let [axis (fn [k] (first (filter #(and (= :orbit (:control %)) (= k (:axis %))) params)))
+        yaw (axis :yaw) pitch (axis :pitch)
+        drag (atom nil)
+        turn (fn [ps p delta]
+               (if p
+                 (update ps (:id p) #(js/Math.max (:min p) (js/Math.min (:max p) (+ % delta))))
+                 ps))]
+    (when (or yaw pitch)
+      {:style {:touch-action "none" :cursor "grab"}
+       :on-pointer-down (fn [^js e]
+                          (when-not (.closest (.-target e) ".mafs-movable-point")
+                            (reset! drag [(.-clientX e) (.-clientY e)])
+                            (.setPointerCapture (.-currentTarget e) (.-pointerId e))))
+       :on-pointer-move (fn [^js e]
+                          (when-let [[x0 y0] @drag]
+                            (let [x (.-clientX e) y (.-clientY e)]
+                              (reset! drag [x y])
+                              (swap! state update :params
+                                     #(-> % (turn yaw (* -0.01 (- x x0))) (turn pitch (* 0.01 (- y y0))))))))
+       :on-pointer-up (fn [_] (reset! drag nil))
+       :on-pointer-cancel (fn [_] (reset! drag nil))})))
+
 (defn- board-view [k base {:keys [board height]}]
-  (let [{:board/keys [window params probes outputs layers label]} board
+  (let [{:board/keys [window params probes outputs layers label] cam :board/view} board
         {[x0 x1] :x [y0 y1] :y} window
         init (into {} (map (juxt :id :init)) params)
         state (r/atom {:params init :probes probes})
@@ -251,20 +313,28 @@
         set-params! (fn [m] (swap! state update :params merge m))
         ;; Every output at the params' initial values: what a readout
         ;; compares against to say whether a quantity survived the drag.
-        baseline (:arrays (sample k base outputs window (map #(get init (:id %)) params)))]
+        baseline (:arrays (sample k base outputs window (map #(get init (:id %)) params)))
+        orbit (orbit-handlers state params)]
     (fn []
       (let [st @state
-            ctx (assoc (sample k base outputs window (map #(get-in st [:params (:id %)]) params))
+            sampled (sample k base outputs window (map #(get-in st [:params (:id %)]) params))
+            ;; A 3D board's points are projected at the current camera.
+            {:keys [layers arrays]} (if cam
+                                      (view/project-board layers (:arrays sampled) cam (:params st))
+                                      {:layers layers :arrays (:arrays sampled)})
+            ctx (assoc sampled
+                       :arrays arrays
                        :probes (:probes st) :move! move!
                        :params (:params st) :set-params! set-params!
                        :baseline baseline :window window)]
         [:div.plato-board-live
-         (into [:> Mafs {:height height :pan false :zoom false
-                         :viewBox #js {:x #js [x0 x1] :y #js [y0 y1]}
-                         :preserveAspectRatio false}
-                [:> (.-Cartesian ^js Coordinates)]]
-               (mapcat (fn [l] (let [e (live-layer l ctx)] (if (seq? e) e (when e [e])))))
-               layers)
+         [:div.plato-board-canvas orbit
+          (into [:> Mafs {:height height :pan false :zoom false
+                          :viewBox #js {:x #js [x0 x1] :y #js [y0 y1]}
+                          :preserveAspectRatio false}
+                 (when-not (= :none (:axes window)) [:> (.-Cartesian ^js Coordinates)])]
+                (mapcat (fn [l] (let [e (live-layer l ctx)] (if (seq? e) e (when e [e])))))
+                (view/paint-order layers arrays))]
          (into [:div.plato-board-readout [:span label]] (keep #(readout % ctx)) layers)
          (into [:div.plato-board-controls] (map #(slider state %)) (filter slider-param? params))]))))
 

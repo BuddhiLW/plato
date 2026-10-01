@@ -22,6 +22,7 @@
    one f64 array of length n per output, at byte offsets in the module's
    `memory`, in :board/outputs order; params in :board/params order."
   (:require [plato.board.layer :as layer]
+            [plato.board.view :as view]
             [plato.content :as content]))
 
 ;; ---------------------------------------------------------------------------
@@ -101,14 +102,22 @@
    JavaScript shows, and what the island replaces."
   [{:keys [board height]}]
   (let [{:keys [project] :as ctx} (context board height)
+        {:board/keys [window params layers]} board
+        ;; A 3D board's points are projected at the params' initial camera.
+        {:keys [layers arrays]} (if-let [v (:board/view board)]
+                                  (view/project-board layers (:arrays ctx) v
+                                                      (into {} (map (juxt :id :init)) params))
+                                  {:layers layers :arrays (:arrays ctx)})
+        ctx (assoc ctx :arrays arrays)
         [ox oy] (project [0 0])]
-    (into [:svg.plato-board-static {:viewBox (str "0 0 " plot-width " " height)
-                                    :width "100%" :role "img"
-                                    :aria-label (str "Plot of " (:board/label board))}
-           [:line {:class "axis" :x1 0 :x2 plot-width :y1 oy :y2 oy}]
-           [:line {:class "axis" :x1 ox :x2 ox :y1 0 :y2 height}]]
-          (keep #(layer/static-layer % ctx))
-          (:board/layers board))))
+    (-> [:svg.plato-board-static {:viewBox (str "0 0 " plot-width " " height)
+                                  :width "100%" :role "img"
+                                  :aria-label (str "Plot of " (:board/label board))}]
+        (into (when-not (= :none (:axes window))
+                [[:line {:class "axis" :x1 0 :x2 plot-width :y1 oy :y2 oy}]
+                 [:line {:class "axis" :x1 ox :x2 ox :y1 0 :y2 height}]]))
+        (into (keep #(layer/static-layer % ctx))
+              (view/paint-order layers arrays)))))
 
 (defn math-lines
   "The board's :board/math as display lines for the page's KaTeX: each TeX

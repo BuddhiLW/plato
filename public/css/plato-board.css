@@ -38,6 +38,13 @@
 .plato-board-slider { display: flex; flex-direction: column; align-items: center; gap: 0.2em; }
 .plato-board-slider span { font-variant-numeric: tabular-nums; min-width: 7em; text-align: center; }
 .plato-board-slider input { width: 11em; }
+/* A param that plays: a button beside its value sweeps it round its range. */
+.plato-board-play {
+  font: inherit; font-size: 0.9em; line-height: 1; padding: 0.15em 0.5em;
+  color: inherit; background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; cursor: pointer;
+}
+.plato-board-play:hover { background: rgba(255,255,255,0.16); }
 
 /* ---- mafs 0.21.0 core.css, vendored so the page reaches no CDN ---------- */
 .MafsView {

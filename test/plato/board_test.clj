@@ -9,6 +9,7 @@
             [plato.board :as board]
             [plato.board.geom :as geom]
             [plato.board.layer :as layer]
+            [plato.board.view :as view]
             [plato.content :as content]
             [plato.deck :as deck]
             [plato.hiccup :as hiccup]
@@ -135,3 +136,57 @@
       (is (str/includes? html "class=\"handle\"")))
     (testing "a point at infinity is not drawn"
       (is (not (str/includes? html ">P</text>"))))))
+
+;; ---- 3D: points named by three outputs, projected by the page --------------
+
+(defn- close? [a b] (< (Math/abs (- (double a) (double b))) 1e-12))
+
+(deftest the-camera-projects-world-to-screen
+  (testing "yaw 0, pitch 0: screen x is world x, screen y is world z, depth is world y"
+    (let [cam (view/camera {:yaw 0 :pitch 0 :scale 1} {})]
+      (is (= [1.0 3.0 2.0] (mapv double (cam 1 2 3))))))
+  (testing "yaw and pitch read from the params by id; a quarter turn of yaw sends x to depth"
+    (let [[sx sy d] ((view/camera {:yaw :yaw :pitch :pitch :scale 2} {:yaw (/ Math/PI 2) :pitch 0}) 1 0 0)]
+      (is (close? 0 sx)) (is (close? 0 sy)) (is (close? 1 d))))
+  (testing "perspective shrinks the far and swells the near"
+    (let [cam (view/camera {:yaw 0 :pitch 0 :scale 1 :perspective 4} {})]
+      (is (< (first (cam 1 2 0)) 1 (first (cam 1 -2 0)))))))
+
+;; A tetrahedron's face and a vertex, seen from yaw 0, pitch 0.
+(def solid
+  {:board/id :solid
+   :board/kind :construction
+   :board/kernel {:wasm "./vendor/boards/solid.wasm" :export "solid"}
+   :board/label "a solid"
+   :board/window {:x [-3 3] :y [-3 3] :n 1 :axes :none}
+   :board/view {:yaw :yaw :pitch 0 :scale 1}
+   :board/params [{:id :yaw :min -3 :max 3 :init 0 :control :orbit :axis :yaw}]
+   :board/outputs [:ax :ay :az :bx :by :bz :cx :cy :cz]
+   :board/layers [{:layer :polygon :pts [[:ax :ay :az] [:bx :by :bz] [:cx :cy :cz]] :label "near"}
+                  {:layer :point :at [:ax :ay :az] :label "far"}
+                  {:layer :handle :at [:bx :by :bz] :along [[:ax :ay :az] [:cx :cy :cz]]
+                   :drives {:s :s} :label "B"}]
+   :board/probes {}
+   :board/frame {:ax [0.0] :ay [2.0] :az [1.0] :bx [1.0] :by [-1.0] :bz [0.0]
+                 :cx [-1.0] :cy [-1.0] :cz [0.0]}})
+
+(deftest a-3d-board-is-projected-and-painted-far-to-near
+  (let [arrays (into {} (map (fn [[k v]] [k (double-array v)])) (:board/frame solid))
+        {:keys [layers arrays]} (view/project-board (:board/layers solid) arrays
+                                                    (:board/view solid) {:yaw 0})
+        [poly pt handle] layers]
+    (testing "every point becomes a screen pair; drawn layers carry their depths"
+      (is (= [[:ax-sx :ax-sy] [:bx-sx :bx-sy] [:cx-sx :cx-sy]] (:pts poly)))
+      (is (= [:ax-d :bx-d :cx-d] (:depth poly)))
+      (is (= [:ax-sx :ax-sy] (:at pt)))
+      (is (= [0.0 1.0] (geom/point arrays (:at pt))) "A at (0, 2, 1) is at (0, 1) on screen"))
+    (testing "a handle is projected but not painted by depth; its line is projected too"
+      (is (nil? (:depth handle)))
+      (is (= [[:ax-sx :ax-sy] [:cx-sx :cx-sy]] (:along handle))))
+    (testing "the far point (depth 2) is painted before the near face (mean depth 0)"
+      (is (= ["far" "near" "B"] (map :label (view/paint-order layers arrays))))))
+  (testing "the static plot draws it, without plane axes"
+    (let [html (render solid)]
+      (is (str/includes? html "class=\"polygon\""))
+      (is (str/includes? html ">far</text>"))
+      (is (not (str/includes? html "class=\"axis\""))))))
