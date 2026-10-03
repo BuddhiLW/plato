@@ -235,9 +235,15 @@
 ;; ---------------------------------------------------------------------------
 ;; The board
 
+(def ^:private play-steps
+  "How many presses of a step button cross a playing param's range."
+  24)
+
 (defn- play-button
-  "A button that sweeps param p across its range, min to max and round
-   again, once every :period seconds (default 6), while it plays."
+  "The transport of a param that plays: a button that sweeps p across its
+   range, min to max and round again, once every :period seconds (default 6),
+   while it plays, between two that pause it and move it one step back or
+   forward (a 24th of the range, held inside it)."
   [state {:keys [id min max period] :or {period 6}}]
   (let [playing (r/atom false)
         span (- max min)
@@ -246,17 +252,30 @@
                 (when @playing
                   (let [v (+ min (mod (+ (- v0 min) (* span (/ (- now t0) (* 1000 period)))) span))]
                     (swap! state assoc-in [:params id] v)
-                    (js/requestAnimationFrame (run t0 v0))))))]
+                    (js/requestAnimationFrame (run t0 v0))))))
+        step! (fn [direction]
+                (reset! playing false)
+                (swap! state update-in [:params id]
+                       #(js/Math.max min (js/Math.min max (+ % (* direction (/ span play-steps)))))))
+        step-button (fn [class text label direction]
+                      [:button {:type "button" :class class :aria-label label :title label
+                                :on-key-down #(.stopPropagation %)
+                                :on-click #(step! direction)}
+                       text])]
     (fn []
-      [:button.plato-board-play
-       {:type "button" :aria-label (if @playing "pause" "play")
-        :on-key-down #(.stopPropagation %)
-        :on-click (fn []
-                    (swap! playing not)
-                    (when @playing
-                      (js/requestAnimationFrame
-                       (run (js/performance.now) (get-in @state [:params id])))))}
-       (if @playing "❚❚" "▶")])))
+      [:span.plato-board-transport
+       (step-button "plato-board-step plato-board-back" "‹" "step back" -1)
+       [:button.plato-board-play
+        {:type "button" :aria-label (if @playing "pause" "play")
+         :title (if @playing "pause" "play")
+         :on-key-down #(.stopPropagation %)
+         :on-click (fn []
+                     (swap! playing not)
+                     (when @playing
+                       (js/requestAnimationFrame
+                        (run (js/performance.now) (get-in @state [:params id])))))}
+        (if @playing "❚❚" "▶")]
+       (step-button "plato-board-step plato-board-forward" "›" "step forward" 1)])))
 
 (defn- slider [state {:keys [id label min max step play] :as p}]
   [:label.plato-board-slider
