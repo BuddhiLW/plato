@@ -42,6 +42,44 @@
             :fill "none"}]))
 (defmethod node->hiccup :line   [g nd] (line-el g nd))
 
+(defn points-str
+  "SVG points= value for px pairs [[x y] ...]: \"x,y x,y ...\"."
+  [pts]
+  (str/join " " (map (fn [[x y]] (str x "," y)) pts)))
+
+(defn- parse-points
+  "Inverse of points-str: \"x,y x,y\" -> [[x y] ...] as doubles."
+  [s]
+  (let [num (fn [t] #?(:cljs    (js/parseFloat t)
+                       :rust    (double (read-string t))
+                       :default (Double/parseDouble t)))]
+    (into []
+          (comp (remove str/blank?)
+                (map (fn [pair] (mapv num (str/split pair #",")))))
+          (str/split (str/trim (str s)) #"\s+"))))
+
+(defn- path-el
+  "A :path node: a polyline through :points (world units), or a polygon when
+   :opts :closed? is true. Stroke from :stroke or :opts (:color :width), fill
+   from :fill (none by default)."
+  [g nd]
+  (let [fr (sc/frame g)
+        s  (or (:stroke nd) {:color (get-in nd [:opts :color] :white)
+                              :width (get-in nd [:opts :width] 3)})
+        f  (:fill nd)]
+    [(if (get-in nd [:opts :closed?]) :polygon :polyline)
+     (cond-> {:points (points-str (map (fn [pt] (let [{:keys [x y]} (geo/point fr pt)] [x y]))
+                                       (:points nd)))
+              :stroke (color/hex (:color s :white))
+              :stroke-width (:width s 3)
+              :stroke-opacity (:opacity s 1)
+              :stroke-linecap "round"
+              :stroke-linejoin "round"
+              :fill "none"}
+       f (assoc :fill (color/hex (:color f)) :fill-opacity (:opacity f 1)))]))
+
+(defmethod node->hiccup :path [g nd] (path-el g nd))
+
 (defn- layout-root-box [g]
   (some (fn [[k value]]
           (when (= "box" (name k)) value))
@@ -144,13 +182,21 @@
 ;; Animated channels are translated to SVG attributes here.
 
 (defn- center-of
-  "Element pivot [cx cy] in SVG px, for scale-about-center."
+  "Element pivot [cx cy] in SVG px, for scale-about-center. A polyline or
+   polygon pivots about the centre of its bounding box."
   [tag a]
   (case tag
     :circle [(:cx a) (:cy a)]
     :rect   [(+ (:x a) (/ (:width a) 2.0)) (+ (:y a) (/ (:height a) 2.0))]
     :text   [(:x a) (:y a)]
     :line   [(/ (+ (:x1 a) (:x2 a)) 2.0) (/ (+ (:y1 a) (:y2 a)) 2.0)]
+    (:polyline :polygon)
+    (let [pts (parse-points (:points a))]
+      (if (seq pts)
+        (let [xs (map first pts) ys (map second pts)]
+          [(/ (+ (reduce min xs) (reduce max xs)) 2.0)
+           (/ (+ (reduce min ys) (reduce max ys)) 2.0)])
+        [0 0]))
     :image  [(+ (:x a) (/ (:width a) 2.0))
              (+ (:y a) (/ (:height a) 2.0))]
     [0 0]))
@@ -183,16 +229,23 @@
 
 (defn- stroke-length
   "Perimeter of SVG element `a` in user units, or nil when `tag` has no closed
-   form here. A rounded rect loses (8 - 2pi) rx over its four corners."
+   form here. A rounded rect loses (8 - 2pi) rx over its four corners; a
+   polygon includes its closing segment, a polyline does not."
   [tag a]
-  (case tag
-    :rect   (let [w (double (:width a)) h (double (:height a))
-                  rx (min (double (or (:rx a) 0)) (/ w 2.0) (/ h 2.0))]
-              (- (* 2.0 (+ w h)) (* (- 8.0 tau) rx)))
-    :circle (* tau (double (:r a)))
-    :line   (let [dx (- (:x2 a) (:x1 a)) dy (- (:y2 a) (:y1 a))]
-              (sqrt (+ (* dx dx) (* dy dy))))
-    nil))
+  (let [seg (fn [[x1 y1] [x2 y2]]
+              (let [dx (- x2 x1) dy (- y2 y1)] (sqrt (+ (* dx dx) (* dy dy)))))]
+    (case tag
+      :rect     (let [w (double (:width a)) h (double (:height a))
+                      rx (min (double (or (:rx a) 0)) (/ w 2.0) (/ h 2.0))]
+                  (- (* 2.0 (+ w h)) (* (- 8.0 tau) rx)))
+      :circle   (* tau (double (:r a)))
+      :line     (seg [(:x1 a) (:y1 a)] [(:x2 a) (:y2 a)])
+      :polyline (let [pts (parse-points (:points a))]
+                  (reduce + 0.0 (map seg pts (rest pts))))
+      :polygon  (let [pts (parse-points (:points a))
+                      ring (if (seq pts) (conj pts (first pts)) pts)]
+                  (reduce + 0.0 (map seg ring (rest ring))))
+      nil)))
 
 (defn- draw-attrs
   "Stroke reveal for element `a`, dashed against its own perimeter.
@@ -211,15 +264,17 @@
         {:pathLength 1 :stroke-dasharray 1 :stroke-dashoffset (- 1.0 reveal)}))))
 
 (defn- merge-paint
-  "Direct-value channels: opacity/fill/stroke, plus the draw reveal and a
-   line's endpoints. `contains?` (not truthiness) so opacity 0.0 still applies.
-   The reveal is measured last, against the endpoints this frame moved to."
+  "Direct-value channels: opacity/fill/stroke, plus the draw reveal, a line's
+   endpoints and a path's points (px pairs). `contains?` (not truthiness) so
+   opacity 0.0 still applies. The reveal is measured last, against the
+   geometry this frame moved to."
   [tag a attrs]
   (let [a (cond-> a
             (contains? attrs :opacity)   (assoc :opacity (:opacity attrs))
             (contains? attrs :fill)      (assoc :fill    (:fill attrs))
             (contains? attrs :stroke)    (assoc :stroke  (:stroke attrs))
-            (contains? attrs :endpoints) (merge (zipmap [:x1 :y1 :x2 :y2] (:endpoints attrs))))]
+            (contains? attrs :endpoints) (merge (zipmap [:x1 :y1 :x2 :y2] (:endpoints attrs)))
+            (contains? attrs :points)    (assoc :points (points-str (:points attrs))))]
     (cond-> a
       (contains? attrs :draw) (merge (draw-attrs tag a (:draw attrs))))))
 

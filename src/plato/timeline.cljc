@@ -18,20 +18,35 @@
   (color/hex (or (get-in nd [:fill :color]) (get-in nd [:opts :color]) :white)))
 
 (defn- initial-node-state [g nd]
-  (let [fr (sc/frame g)]
-    (if (= :line (:node nd))
-      (let [f (geo/point fr (:from nd)) t (geo/point fr (:to nd))]          ; a line has endpoints, not an :at
+  (let [fr (sc/frame g)
+        px (fn [pt] (let [{:keys [x y]} (geo/point fr pt)] [x y]))]
+    (case (:node nd)
+      :line                                                  ; a line has endpoints, not an :at
+      (let [[fx fy :as f] (px (:from nd)) [tx ty :as t] (px (:to nd))
+            mid [(/ (+ fx tx) 2.0) (/ (+ fy ty) 2.0)]]
         {:value   nil
          :fill    (rest-fill nd)
-         :from-px [(:x f) (:y f)]
-         :to-px   [(:x t) (:y t)]
-         :pos-px  [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]
-         :base-px [(/ (+ (:x f) (:x t)) 2.0) (/ (+ (:y f) (:y t)) 2.0)]})
-      (let [{:keys [x y]} (geo/point fr (sc/resolve-at g nd))]    ; world -> SVG px, y-flip once
-        {:value   (:value nd)                                  ; 23->1000.0, 25->0.0, else nil
+         :from-px f
+         :to-px   t
+         :pos-px  mid
+         :base-px mid})
+      :path                                                  ; a path has points; it pivots on its bbox centre
+      (let [pts (mapv px (:points nd))
+            xs (map first pts) ys (map second pts)
+            mid (if (seq pts)
+                  [(/ (+ (reduce min xs) (reduce max xs)) 2.0)
+                   (/ (+ (reduce min ys) (reduce max ys)) 2.0)]
+                  [0.0 0.0])]
+        {:value     nil
+         :fill      (rest-fill nd)
+         :points-px pts
+         :pos-px    mid
+         :base-px   mid})
+      (let [[x y] (px (sc/resolve-at g nd))]                 ; world -> SVG px, y-flip once
+        {:value   (:value nd)                                ; 23->1000.0, 25->0.0, else nil
          :fill    (rest-fill nd)
          :pos-px  [x y]
-         :base-px [x y]}))))                                       ; immutable rest anchor
+         :base-px [x y]}))))                                 ; immutable rest anchor                                       ; immutable rest anchor
 
 (defn init-state
   "id -> {:value :fill :pos-px :base-px}. Only these are read by tween constructors."

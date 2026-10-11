@@ -78,6 +78,22 @@
                    [fx' fy'] from-px' [tx' ty'] to-px']
                {:endpoints [(lerp fx fx' p) (lerp fy fy' p) (lerp tx tx' p) (lerp ty ty' p)]})))
 
+(defn- pad-to
+  "Extend px pairs `pts` to `n` entries by repeating the last one."
+  [pts n]
+  (let [v (vec pts)]
+    (if (or (empty? v) (>= (count v) n)) v (into v (repeat (- n (count v)) (peek v))))))
+
+(defrecord Reshape [from to]                      ; SVG px pairs, before and after
+  p/ITween (-sample [_ t]
+             (let [p (smooth t)]
+               (cond
+                 (<= p 0.0) {:points from}
+                 (>= p 1.0) {:points to}
+                 :else (let [n (max (count from) (count to))]
+                         {:points (mapv (fn [[x y] [x' y']] [(lerp x x' p) (lerp y y' p)])
+                                        (pad-to from n) (pad-to to n))})))))
+
 (defrecord Emphasize [base pulse max-scale]       ; base/pulse = hex; pivot derived in -apply
   p/ITween (-sample [_ t]
              (let [a (there-and-back t)]
@@ -99,6 +115,7 @@
    :count-to  #{:text}
    :glide     #{:translate}
    :connect   #{:endpoints}
+   :reshape   #{:points}
    :morph     #{}})
 
 ;; ── constructor seam: descriptor + threaded start-state -> {:tween :writes} ──
@@ -115,6 +132,13 @@
         f'   (let [{:keys [x y]} (geo/point fr (pget anim :from))] [x y])
         t'   (let [{:keys [x y]} (geo/point fr (pget anim :to))] [x y])]
     {:tween (->Connect f t f' t') :writes {:from-px f' :to-px t'}}))
+
+(defmethod build-span :reshape [{:keys [g state]} anim]
+  (let [id   (:target anim)
+        fr   (sc/frame g)
+        from (get-in state [id :points-px])                 ; current points (threaded)
+        to   (mapv (fn [pt] (let [{:keys [x y]} (geo/point fr pt)] [x y])) (pget anim :points))]
+    {:tween (->Reshape from to) :writes {:points-px to}}))
 
 (defmethod build-span :appear [_ _] {:tween (->Appear) :writes nil})
 (defmethod build-span :vanish [_ _] {:tween (->Vanish) :writes nil})
