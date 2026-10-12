@@ -330,7 +330,7 @@
                 ""
                 (str "wrote " out " (" (count payload) " bytes, " frames " frames)"))}))
 
-(def version "0.3.0")
+(def version "0.4.0")
 
 ;; ── I/O boundary ────────────────────────────────────────────────────────────
 
