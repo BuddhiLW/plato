@@ -161,6 +161,43 @@
    :async? true
    :call "if (window.plato && plato.scene_island) plato.scene_island.hydrate();"})
 
+(def board-runtime
+  "The standalone board bundle and stylesheet, relative to :asset-base, and
+   the call that hydrates every `[data-plato-board]` element into a live board
+   over its WebAssembly kernel (plato.board-island, the shadow :board target).
+   Loaded async and hydrated idempotently, exactly like the scene bundle."
+  {:src "/vendor/plato-board/main.js"
+   :css "/css/plato-board.css"
+   :async? true
+   :call "if (window.plato && plato.board_island) plato.board_island.hydrate();"})
+
+(defn- board-content? [x]
+  (and (map? x) (= :board (:plato/type x))))
+
+(defn needs-board-runtime?
+  "Does any slide carry a :board? Then the page links the board bundle.
+
+   Read off the deck, like needs-fit-runtime?: a board is interactive by
+   definition, so an author who put one on a slide has said everything; a
+   flag they could forget would ship a plot that never moves. The static SVG
+   is still what the served bytes carry, so the page reads before any script."
+  [deck]
+  (boolean (some (fn [slide] (some board-content? (tree-seq coll? seq (:content slide))))
+                 (deck/leaf-slides deck))))
+
+(defn needs-math?
+  "Does the page carry KaTeX? When the opts or the deck say {:math? true}, or
+   when any board brings its mathematics as TeX (:board/math): the board sets
+   those lines beside its plot, and a flag its author could forget would ship
+   them as raw TeX. One function, so the page and its Reveal config agree."
+  [deck opts]
+  (boolean
+   (or (:math? opts) (:math? deck)
+       (some (fn [slide]
+               (some #(and (board-content? %) (seq (get-in % [:board :board/math])))
+                     (tree-seq coll? seq (:content slide))))
+             (deck/leaf-slides deck)))))
+
 (def katex-runtime
   "Where a page finds KaTeX, relative to :asset-base: the katex npm package's
    dist tree, vendored by `bb assets`. Reveal's KaTeX plugin reads the path
@@ -174,10 +211,9 @@
    this, so the live shell and the export point at the same copy. A deck may
    set its own :katex options (delimiters, macros); only :local is filled in."
   [deck opts]
-  (let [{:keys [asset-base math?]} (merge default-opts opts)
-        math? (boolean (or math? (:math? deck)))]
+  (let [{:keys [asset-base]} (merge default-opts opts)]
     (cond-> (or (:config deck) {})
-      math? (update :katex #(merge {:local (str asset-base (:local katex-runtime))} %)))))
+      (needs-math? deck opts) (update :katex #(merge {:local (str asset-base (:local katex-runtime))} %)))))
 
 (defn needs-fit-runtime?
   "Does this deck have to carry plato.fit to render correctly?
@@ -194,16 +230,17 @@
   "Inline Reveal bootstrap source for `config`, registering the plugins `opts`
    enables.
 
-   With :fit? set the bootstrap also starts plato.fit, and with :live-scenes?
-   it hydrates the scenes. Both chain off the promise `Reveal.initialize`
-   returns rather than calling straight through: that promise resolves once the
-   deck is laid out, which is the first moment a slide's size is a fact rather
-   than a guess."
+   With :fit? set the bootstrap also starts plato.fit, with :live-scenes? it
+   hydrates the scenes, and with :live-boards? the boards. All chain off the
+   promise `Reveal.initialize` returns rather than calling straight through:
+   that promise resolves once the deck is laid out, which is the first moment
+   a slide's size is a fact rather than a guess."
   ([config] (init-script config {}))
-  ([config {:keys [fit? live-scenes?] :as opts}]
+  ([config {:keys [fit? live-scenes? live-boards?] :as opts}]
    (let [calls (cond-> []
                  fit? (conj (:call fit-runtime))
-                 live-scenes? (conj (:call scene-runtime)))]
+                 live-scenes? (conj (:call scene-runtime))
+                 live-boards? (conj (:call board-runtime)))]
      (str "Reveal.initialize(Object.assign("
           (->json (or config {}))
           ", {plugins: [" (str/join ", " (plugin-globals opts)) "]}))"
@@ -214,8 +251,9 @@
 (defn- stylesheet [href]
   [:link {:rel "stylesheet" :href href}])
 
-(defn- head-hiccup [deck {:keys [asset-base theme title description stylesheets]}]
-  (let [description (or description (:description deck))]
+(defn- head-hiccup [deck {:keys [asset-base theme title description stylesheets] :as opts}]
+  (let [description (or description (:description deck))
+        boards? (or (:live-boards? opts) (needs-board-runtime? deck))]
     (into (cond-> [:head
                    [:meta {:charset "utf-8"}]
                    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]]
@@ -227,14 +265,16 @@
                        (stylesheet (str asset-base "/vendor/reveal.css"))
                        (stylesheet (str asset-base "/vendor/theme/" (name theme) ".css"))
                        (stylesheet (str asset-base "/vendor/highlight/monokai.css"))
-                       (stylesheet (str asset-base "/css/plato.css"))))
+                       (stylesheet (str asset-base "/css/plato.css")))
+            boards? (conj (stylesheet (str asset-base (:css board-runtime)))))
           (map stylesheet)
           stylesheets)))
 
 (defn- body-hiccup [deck {:keys [asset-base scripts after-slides] :as opts}]
   (let [fit? (or (:fit? opts) (needs-fit-runtime? deck))
         live-scenes? (boolean (:live-scenes? opts))
-        opts (assoc opts :fit? fit? :live-scenes? live-scenes?)]
+        live-boards? (or (boolean (:live-boards? opts)) (needs-board-runtime? deck))
+        opts (assoc opts :fit? fit? :live-scenes? live-scenes? :live-boards? live-boards?)]
     (-> [:body
          [:div.reveal (slides-hiccup deck)]]
         (into after-slides)
@@ -242,6 +282,8 @@
         (into (map #(plugin-script-tag asset-base %)) (active-plugins opts))
         (cond-> fit? (conj [:script {:src (str asset-base (:src fit-runtime))}])
                 live-scenes? (conj [:script {:src (str asset-base (:src scene-runtime))
+                                             :async ""}])
+                live-boards? (conj [:script {:src (str asset-base (:src board-runtime))
                                              :async ""}]))
         (into (map (fn [src] [:script {:src src}])) scripts)
         (conj [:script {:type "text/javascript"} (init-script (reveal-config deck opts) opts)]))))
@@ -250,13 +292,13 @@
   "Deck -> the whole [:html ...] document. opts: :asset-base :theme :title
    :description :stylesheets :scripts :math? :fit? :live-scenes? :after-slides.
 
-   :math? is read off the deck as well as the opts: a deck that declares
-   {:math? true} has said it needs the plugin, and the live shell reads the
-   same key, so the two render targets cannot disagree about it."
+   :math? is read off the deck as well as the opts (see needs-math?): a deck
+   that declares {:math? true}, or carries a board with :board/math, has said
+   it needs the plugin, so the two render targets cannot disagree about it."
   ([deck] (deck-hiccup deck {}))
   ([deck opts]
    (let [opts (-> (merge default-opts opts)
-                  (assoc :math? (boolean (or (:math? opts) (:math? deck)))))]
+                  (assoc :math? (needs-math? deck opts)))]
      [:html {:lang (or (:lang deck) "en")}
       (head-hiccup deck opts)
       (body-hiccup deck opts)])))
