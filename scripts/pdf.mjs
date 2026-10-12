@@ -108,6 +108,19 @@ async function print(deckHtml, outPdf) {
     await page.waitForFunction(() => document.querySelectorAll('.pdf-page').length > 0, null, { timeout: 60000 });
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => [...document.images].every(i => i.complete), null, { timeout: 60000 });
+    // An <image> inside an inline SVG is not in document.images: load each href
+    // once so it is decoded before the page is printed, and learn which ones fail.
+    const svgBroken = await page.evaluate(async () => {
+      const hrefs = [...new Set([...document.querySelectorAll('svg image')]
+        .map(i => i.getAttribute('href') || i.getAttribute('xlink:href')).filter(Boolean))];
+      const loaded = await Promise.all(hrefs.map(h => new Promise(done => {
+        const im = new Image();
+        im.onload = () => done(null);
+        im.onerror = () => done(h);
+        im.src = h;
+      })));
+      return loaded.filter(Boolean);
+    });
 
     const meta = await page.evaluate(() => {
       const cfg = Reveal.getConfig();
@@ -118,7 +131,33 @@ async function print(deckHtml, outPdf) {
         const line = b => (b.tagName === 'LI' ? '- ' : '') + b.textContent.replace(/\s+/g, ' ').trim();
         return (blocks.length ? blocks.map(line).join('\n\n') : el.textContent.trim()).replace(/\n\n- /g, '\n- ');
       };
-      const pages = [...document.querySelectorAll('.pdf-page')].map(p => {
+      // Print mode clones a slide once per fragment step, ids and all. A url(#id)
+      // then resolves to the FIRST clone, where the fragment holding the clipPath
+      // or gradient is still hidden, and whatever it paints vanishes. Give every
+      // id inside an SVG a name of its own page, and repoint the page's references.
+      const REFS = ['clip-path', 'mask', 'fill', 'stroke', 'filter', 'marker-start', 'marker-mid', 'marker-end', 'style'];
+      const ownIds = (p, n) => {
+        const renamed = new Map();
+        for (const el of p.querySelectorAll('svg [id]')) {
+          renamed.set(el.id, `${el.id}-p${n}`);
+          el.id = `${el.id}-p${n}`;
+        }
+        if (!renamed.size) return;
+        const repoint = v => v.replace(/url\((['"]?)#([^'")]+)\1\)/g,
+          (m, q, id) => renamed.has(id) ? `url(#${renamed.get(id)})` : m);
+        for (const el of p.querySelectorAll('svg, svg *')) {
+          for (const a of REFS) {
+            const v = el.getAttribute(a);
+            if (v && v.includes('url(')) el.setAttribute(a, repoint(v));
+          }
+          for (const a of ['href', 'xlink:href']) {
+            const v = el.getAttribute(a);
+            if (v && v[0] === '#' && renamed.has(v.slice(1))) el.setAttribute(a, '#' + renamed.get(v.slice(1)));
+          }
+        }
+      };
+      const pages = [...document.querySelectorAll('.pdf-page')].map((p, n) => {
+        ownIds(p, n);
         const s = p.querySelector('section');
         if (!s) return { transition: cfg.transition, notes: '', links: [] };
         // A box that scrolls on screen cannot scroll on paper: let it grow, then fit the slide.
@@ -178,6 +217,7 @@ async function print(deckHtml, outPdf) {
       return { width: r.width, height: r.height, fitted, broken, pages };
     });
 
+    meta.broken.push(...svgBroken);
     await page.pdf({ path: outPdf, preferCSSPageSize: true, printBackground: true,
                      margin: { top: 0, right: 0, bottom: 0, left: 0 } });
     return meta;
