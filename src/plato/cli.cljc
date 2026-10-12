@@ -21,80 +21,12 @@
             [plato.tokens :as tokens]
             #?(:clj [clojure.java.io :as io])
             [plato.json :as json]
-            [plato.spec :as spec]))
+            [plato.spec :as spec]
+            [plato.cli.usage :as usage]))
 
 (def usage
-  (str/join
-   "\n"
-   ["plato — data-driven presentations"
-    ""
-    "  plato build <source.md|source.org> [options]"
-    "  plato build --deck <ns/var> --out <path> [options]"
-    "  plato spec  <source.md|source.org> [options]"
-    "  plato hyperframes <source.md|source.org> [options]"
-    "  plato hyperframes --deck <ns/var> --out <dir> [options]"
-    "  plato serve <source.md|source.org> [options]"
-    "  plato theme <tokens.edn> [options]"
-    "  plato help | version"
-    ""
-    "build options"
-    "  -o, --out <path>        output HTML (default: the source with a .html suffix)"
-    "      --deck <ns/var>     build the deck a var holds instead of a source file"
-    "      --title <string>    page title (default: the deck title)"
-    "      --description <s>   page meta description (default: the deck's :description)"
-    "      --theme <name>      Reveal theme name (default: night)"
-    "      --theme-css <path>  extra stylesheet to link, as authored"
-    "      --tokens <path>     token source: generates a theme CSS beside the output and links it"
-    "      --asset-base <path> prefix for vendor/ and css/ links (default: .)"
-    "      --assets <dir>      copy vendor/ and css/ from <dir> beside the page"
-    "      --math              load the math plugin, with KaTeX from vendor/katex;"
-    "                          implied by a deck that declares {:math? true}"
-    "      --fit               load plato.fit so the page can report whether its"
-    "                          slides fit; implied by any {:overflow :shrink} slide"
-    "      --live-scenes       load the scene bundle so Desargues scenes play and"
-    "                          scrub in the page instead of showing their final frame"
-    "      --print             write the page to stdout instead of a file"
-    ""
-    "spec options — emit an AutoPDF DocumentSpec, for a Beamer PDF of the same source"
-    "  -o, --out <path>        output JSON (default: the source with a .json suffix)"
-    "      --title <string>    document id (default: the deck title)"
-    "      --theme <name>      theme name carried to the renderer"
-    "      --print             write the JSON to stdout instead of a file"
-    ""
-    "hyperframes options — emit a HyperFrames slideshow project, for"
-    "  `hyperframes present`, `snapshot` and `render` (github.com/heygen-com/hyperframes)"
-    "  -o, --out <dir>         project directory, receives index.html"
-    "                          (default: the source stem with a -hyperframes suffix)"
-    "      --deck <ns/var>     build the deck a var holds instead of a source file"
-    "      --title <string>    page title (default: the deck title)"
-    "      --description <s>   page meta description (default: the deck's :description)"
-    "      --theme-css <path>  extra stylesheet to link, as authored"
-    "      --tokens <path>     token source: generates a theme CSS beside the page and links it"
-    "      --asset-base <path> prefix for css/ and vendor/ links (default: .)"
-    "      --assets <dir>      copy css/, assets/, the scene bundle and the HyperFrames"
-    "                          runtime from <dir> into the project"
-    "      --width <px>        composition width (default: 1920)"
-    "      --height <px>       composition height (default: 1080); 1080 x 1920"
-    "                          is the vertical frame an ad is cut in"
-    "      --print             write the page to stdout instead of a file"
-    ""
-    "serve options — a dev server (JVM): the deck rendered from its source on every"
-    "  request, and the page reloads when the source or its theme inputs change"
-    "      --port <n>          port to listen on (default: 8090)"
-    "      --assets <dir>      directory the page's vendor/, css/ and assets/ links resolve in"
-    "                          (default: public)"
-    "      --hyperframes       serve the HyperFrames project instead: index.html is the"
-    "                          composition and present.html the presenter"
-    "      --deck, --title, --description, --theme, --theme-css, --tokens, --math,"
-    "      --fit, --live-scenes as for build"
-    ""
-    "theme options"
-    "  -o, --out <path>        output CSS (default: the source with a .css suffix)"
-    "      --json <path>       also write the language-neutral manifest"
-    "      --cljc <path>       also write the tokens as a Clojure namespace"
-    "      --sty <path>        also write a Beamer style file, for autopdf deck"
-    "      --ns <symbol>       namespace for --cljc (default: plato.theme)"
-    "      --print             write the CSS to stdout instead of a file"]))
+  "What `plato help` prints, and what follows a bad command line."
+  usage/text)
 
 (def flags
   "Long/short option -> [key arity]. Arity 0 options are booleans."
@@ -114,6 +46,11 @@
    "--live-scenes" [:live-scenes? 0]
    "--port" [:port 1]
    "--hyperframes" [:hyperframes? 0]
+   "--no-transitions" [:no-transitions? 0]
+   "--no-compress" [:no-compress? 0]
+   "--dpi" [:dpi 1]
+   "--engine" [:engine 1]
+   "--keep" [:keep? 0]
    "--json" [:json 1]
    "--cljc" [:cljc 1]
    "--sty" [:sty 1]
@@ -123,16 +60,17 @@
 (def commands
   "Bare words that select what the CLI does."
   {"build" :build "theme" :theme "spec" :spec "hyperframes" :hyperframes "serve" :serve
+   "pdf" :pdf
    "help" :help "-h" :help "--help" :help
    "version" :version "-v" :version "--version" :version})
 
 (def deck-commands
   "Commands that render a deck, from a source file or a --deck var."
-  #{:build :hyperframes :serve})
+  #{:build :hyperframes :serve :pdf})
 
 (def file-commands
   "Deck commands that write files, so a --deck build must say where."
-  #{:build :hyperframes})
+  #{:build :hyperframes :pdf})
 
 (defn parse-args
   "argv -> {:command keyword :input string :opts map} or {:error string}."
@@ -512,6 +450,9 @@
               :serve #?(:clj ((requiring-resolve 'plato.serve/serve!) parsed)
                         :default (throw (ex-info "serve needs the JVM: this runtime has no HTTP server"
                                                  {:command :serve})))
+              :pdf #?(:clj ((requiring-resolve 'plato.pdf/pdf!) parsed)
+                      :default (throw (ex-info "pdf needs the JVM: this runtime cannot start the browser that prints the page"
+                                               {:command :pdf})))
               :spec (spec-job {:input input :text (read-source input) :opts opts})
               :theme (theme-job {:input input :token-maps (token-chain input) :opts opts}))]
     (doseq [{:keys [path content]} (:files job)]

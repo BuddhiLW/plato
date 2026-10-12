@@ -287,6 +287,61 @@ so they print as a visible placeholder rather than vanishing — as do GIFs, and
 scene snapshots until something converts the SVG. See
 [docs/autopdf.md](docs/autopdf.md).
 
+## A PDF of the deck as the browser shows it
+
+The Beamer route above re-typesets the source, so it needs a Markdown or Org
+document and gives a Beamer-looking deck. `plato pdf` prints the *built page*
+instead: the PDF is the browser deck, page for page, and it works for any deck,
+a hiccup one included.
+
+~~~bash
+plato pdf talk.md -o talk.pdf --tokens theme/acme.tokens.edn --assets public
+plato pdf --deck my.deck/model -o talk.pdf --tokens theme/my.tokens.edn --assets . --fit
+plato pdf dist/talk/index.html               # a page that is already built
+~~~
+
+A source, or the deck a `--deck` var holds, is built first, into a scratch
+directory, with the same options `plato build` takes; `--assets <dir>` also
+brings `<dir>/assets`, the deck's pictures. A built page (an `.html` file, or a
+directory with an `index.html`) is printed as it stands. Either way the command
+is the same from any repository that depends on plato: the printer ships on
+plato's classpath.
+
+It writes three files:
+
+| File | What it is |
+| --- | --- |
+| `talk.pdf` | one page per fragment step, with a page transition on each |
+| `talk.pdfpc` | the speaker notes, for [pdfpc](https://pdfpc.github.io); keep it beside the PDF |
+| `talk.notes.md` | the same notes as a plain script, for a venue with no presenter console |
+
+Each Reveal transition becomes the Beamer one nearest to it: `slide` is
+`\transpush`, `fade` is `\transdissolve`, `convex` and `concave` are `\transcover`
+and `\transuncover`, `zoom` is `\transboxout`. A fragment step is a short dissolve,
+and a slide down a vertical stack rises from below. Links stay clickable, and a
+link to another slide jumps to that slide's page.
+
+**Every extra degrades to a plain page.** PDF transitions play in full-screen
+mode in Adobe Reader, Okular, pdfpc and Impressive; the viewers inside Chrome,
+Edge and Firefox ignore them and cut between pages. Nothing else reads the
+`.pdfpc` file. So the worst case, on a machine you have never seen, is a correct
+static PDF, which is the reason to carry one beside the HTML folder.
+
+A slide taller than its page is scaled down to fit, as `plato-fit` does on
+screen, and a box that scrolls on screen is opened first: paper cannot scroll.
+Video, audio and live scenes print as their current frame.
+
+JVM only, like `serve`: the native binary cannot start the browser. It needs
+Node with Playwright and its Chromium (`npm install --save-dev playwright && npx
+playwright install chromium`), a TeX install with Beamer, and optionally
+Ghostscript, which shrinks the images (`--dpi`, default 200; `--no-compress` to
+skip). Playwright is looked for beside plato, then in the directory the command
+runs from, then in `PLATO_NODE_MODULES`; `CHROME_PATH` names a Chromium to use
+instead of Playwright's own. LuaLaTeX is used when installed: it shares one copy
+of the fonts across pages, where pdfLaTeX repeats them on every page.
+`--no-transitions` gives plain cuts, and `--keep` leaves the work directories for
+inspection.
+
 ## Static export
 
 Any deck renders to a standalone Reveal page with no shadow-cljs and no browser. One CLI does
