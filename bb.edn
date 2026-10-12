@@ -26,6 +26,8 @@
            :task (shell "npx shadow-cljs release app acme")}
   video   {:doc "Render a scene deck to MP4 with no browser: bb video --deck ns/var -o out.mp4 [--preview] [--play]"
            :task (apply shell "clojure" "-M:dev" "-m" "plato.video.encode" *command-line-args*)}
+  pdf     {:doc "Print a built deck to a PDF with Beamer transitions: bb pdf dist/talk/index.html -o talk.pdf"
+           :task (apply shell "node" "scripts/pdf.mjs" *command-line-args*)}
 
   ;; Installing. `brew install buddhilw/tap/plato` gets a PINNED tag and is what
   ;; someone authoring a deck elsewhere wants. These two install the code in

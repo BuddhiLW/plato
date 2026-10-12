@@ -17,6 +17,8 @@
     "e2e:export": "clojure -M:cli build test/fixtures/shrink.edn -o public/e2e/shrink-export.html --asset-base ..",
     "check": "npm run test && npm run build",
     "fixtures": "node scripts/gen-fixtures.mjs",
+    "pdf": "node scripts/pdf.mjs",
+    "test:pdf": "node --test test/pdf.test.mjs",
     "cli": "clojure -M:cli",
     "export": "clojure -M:cli build",
     "cli:native": "bash scripts/build-cli.sh",
