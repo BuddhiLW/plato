@@ -125,20 +125,38 @@
 
 (defmethod advance-step :default [cursor _g _step] cursor)   ; unknown step: no-op
 
+(defn- mark-step
+  "Record where a step ended as a mark. A :hold is a pause after a step, not
+   a step of its own, so it moves the mark it follows instead of adding one:
+   stepping forward lands after the pause, where the next step begins."
+  [cursor step]
+  (let [t (:t cursor)]
+    (update cursor :marks
+            (fn [marks]
+              (cond
+                (<= t (peek marks)) marks
+                (and (= :hold (:step step)) (next marks)) (conj (pop marks) t)
+                :else (conj marks t))))))
+
 (defn- fold-steps [g]
-  (let [start {:t 0.0 :state (init-state g) :spans []}]
-    (reduce #(advance-step %1 g %2) start (sc/steps g))))
+  (let [start {:t 0.0 :state (init-state g) :spans [] :marks [0.0]}]
+    (reduce #(mark-step (advance-step %1 g %2) %2) start (sc/steps g))))
 
 ;; ── assembly (L5) ───────────────────────────────────────────────────────────
 (defn- index-spans   [spans] (vec (map-indexed (fn [i s] (assoc s :idx i)) spans)))
 (defn- revealable-ids [spans] (into #{} (comp (filter reveals?) (map :target)) spans))
 (defn- draw-order    [g]     (vec (sort (keys (sc/nodes g)))))
 
-(defn compile-timeline [g]
-  (let [{:keys [spans t]} (fold-steps g)
+(defn compile-timeline
+  "A scene graph -> its timeline. :marks are the times a transport steps
+   between, ascending: 0, then the end of each step (a :hold after a step
+   carried along with it), the last equal to :duration."
+  [g]
+  (let [{:keys [spans t marks]} (fold-steps g)
         spans (index-spans spans)]
     {:duration   t
      :spans      spans
+     :marks      marks
      :revealable (revealable-ids spans)
      :node-ids   (draw-order g)}))
 

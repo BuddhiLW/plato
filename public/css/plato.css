@@ -108,12 +108,29 @@ html, body, #app {
   transition: filter 0.15s ease;
 }
 .plato-transport button:hover { filter: brightness(1.12); }
+/* The step and restart buttons are quieter than Play, and dim at the end
+   they cannot go past. */
+.plato-transport button:not(.plato-transport-play) {
+  padding: 0.4rem 0.65rem;
+  background: transparent;
+  color: var(--plato-accent);
+  box-shadow: inset 0 0 0 1px var(--plato-accent);
+  font-weight: 700;
+  line-height: 1;
+}
+.plato-transport button:disabled { opacity: 0.35; cursor: default; filter: none; }
+.plato-transport-play { min-width: 4.6rem; }
 .plato-transport input {
   flex: 1;
   accent-color: var(--plato-accent);
 }
+/* The scene is itself a control (click, Space, arrows): show where the keys go. */
+.plato-scene[tabindex] { cursor: pointer; outline: 0; }
+.plato-scene[tabindex]:focus-visible svg { border-color: var(--plato-accent); box-shadow: 0 0 0 2px var(--plato-accent); }
+.plato-scene[tabindex] .plato-transport { cursor: default; }
 .plato-transport output {
-  min-width: 7.5rem;
+  min-width: 13rem;
+  text-align: right;
   color: var(--plato-muted);
   font-variant-numeric: tabular-nums;
 }

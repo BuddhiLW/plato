@@ -18,7 +18,8 @@
             [plato.player :as player]
             [plato.protocols :as p]
             [plato.render :as render]
-            [plato.timeline :as timeline]))
+            [plato.timeline :as timeline]
+            [plato.clock :as clock]))
 
 (defn- fmt [t] (.toFixed t 2))
 
@@ -72,18 +73,47 @@
 (defn- element [doc tag]
   (.createElement doc tag))
 
-(defn- build-transport [doc browser-player duration]
+(defn- controls
+  "The transport's actions over `browser-player`, as a map of thunks:
+   :toggle plays or pauses; :back and :forward pause and seek to the mark
+   before or after the current time (plato.clock), so they move step by
+   step; :restart and :end seek to the two ends."
+  [browser-player {:keys [marks duration]}]
+  (let [state (player/state-atom browser-player)
+        go! (fn [t]
+              (p/-pause! browser-player)
+              (p/-seek! browser-player t))]
+    {:toggle (fn []
+               (if (:playing? @state)
+                 (p/-pause! browser-player)
+                 (p/-play! browser-player)))
+     :back (fn [] (go! (or (clock/prev-mark marks (:t @state)) 0.0)))
+     :forward (fn [] (go! (or (clock/next-mark marks (:t @state)) duration)))
+     :restart (fn [] (go! 0.0))
+     :end (fn [] (go! duration))}))
+
+(defn- transport-button [doc class text label on-click]
+  (let [button (element doc "button")]
+    (.setAttribute button "type" "button")
+    (set! (.-className button) class)
+    (set! (.-textContent button) text)
+    (.setAttribute button "aria-label" label)
+    (.setAttribute button "title" label)
+    (.addEventListener button "click" (fn [_] (on-click)))
+    button))
+
+(defn- build-transport
+  "div.plato-transport: restart, step back, play or pause, step forward, the
+   position slider, and the readout."
+  [doc browser-player duration {:keys [toggle back forward restart]}]
   (let [root (element doc "div")
-        button (element doc "button")
+        restart-button (transport-button doc "plato-transport-restart" "↺" "Restart (Home)" restart)
+        back-button (transport-button doc "plato-transport-back" "‹" "Previous step (←)" back)
+        button (transport-button doc "plato-transport-play" "Play" "Play animation (Space)" toggle)
+        forward-button (transport-button doc "plato-transport-forward" "›" "Next step (→)" forward)
         range (element doc "input")
         output (element doc "output")]
     (set! (.-className root) "plato-transport")
-    (.setAttribute button "type" "button")
-    (.addEventListener button "click"
-                       (fn [_]
-                         (if (:playing? @(player/state-atom browser-player))
-                           (p/-pause! browser-player)
-                           (p/-play! browser-player))))
     (.setAttribute range "type" "range")
     (.setAttribute range "min" "0")
     (.setAttribute range "max" (str duration))
@@ -93,14 +123,56 @@
                        (fn [e]
                          (p/-seek! browser-player
                                    (js/parseFloat (.. e -target -value)))))
-    (.append root button range output)
-    {:root root :button button :range range :output output}))
+    (.append root restart-button back-button button forward-button range output)
+    {:root root :button button :back back-button :forward forward-button
+     :range range :output output}))
 
-(defn- sync-transport! [{:keys [button range output]} {:keys [t duration playing?]}]
-  (set! (.-textContent button) (if playing? "Pause" "Play"))
-  (.setAttribute button "aria-label" (if playing? "Pause animation" "Play animation"))
-  (set! (.-value range) (str t))
-  (set! (.-textContent output) (str (fmt t) " / " (fmt duration) " s")))
+(defn- sync-transport!
+  "Show the clock on the transport: the play button's word, the slider, the
+   step and time readout, and the step buttons dimmed at the two ends."
+  [{:keys [button back forward range output]} marks {:keys [t duration playing?]}]
+  (let [steps (dec (count marks))
+        label (if playing? "Pause animation (Space)" "Play animation (Space)")]
+    (set! (.-textContent button) (if playing? "Pause" "Play"))
+    (.setAttribute button "aria-label" label)
+    (.setAttribute button "title" label)
+    (set! (.-disabled back) (<= t 0))
+    (set! (.-disabled forward) (>= t duration))
+    (set! (.-value range) (str t))
+    (set! (.-textContent output)
+          (str (when (> steps 1)
+                 (str "step " (clock/mark-index marks t) " / " steps " · "))
+               (fmt t) " / " (fmt duration) " s"))))
+
+(def ^:private keymap
+  "Key -> transport action, while the scene has the focus."
+  {" " :toggle "k" :toggle "K" :toggle
+   "ArrowLeft" :back "ArrowRight" :forward
+   "Home" :restart "End" :end})
+
+(defn- on-key
+  "A keydown inside the scene. A mapped key runs its action and stops there,
+   so the deck under the scene does not also change slide. A key the focused
+   control already owns (the slider's arrows, a button's Space) is left to
+   it, and only kept from the deck."
+  [actions ^js e]
+  (let [k (.-key e)
+        tag (.. e -target -tagName)]
+    (when (and (contains? keymap k)
+               (not (or (.-ctrlKey e) (.-metaKey e) (.-altKey e))))
+      (.stopPropagation e)
+      (when-not (or (= "INPUT" tag)
+                    (and (= "BUTTON" tag) (= " " k)))
+        (.preventDefault e)
+        ((get actions (keymap k)))))))
+
+(defn- on-click
+  "A click on the picture plays or pauses, and gives the scene the focus so
+   the keys reach it. Clicks on the transport are its own."
+  [el actions ^js e]
+  (when-not (.closest (.-target e) ".plato-transport")
+    (.focus el #js {:preventScroll true})
+    ((:toggle actions))))
 
 (defn- svg-node [doc html]
   (let [tpl (element doc "template")]
@@ -110,15 +182,23 @@
 (defn mount!
   "Mount `scene` (a `plato.desargues/scene` value) into `el`, replacing its
    children. `:autoplay?` starts playback when the element is first shown,
-   not when it mounts. Returns a handle for `destroy!`."
+   not when it mounts. `:controls?` adds the transport and makes the scene
+   itself a control: a click on the picture plays or pauses and focuses it,
+   and while it has the focus Space plays or pauses, the left and right
+   arrows step, Home and End jump to the ends. Returns a handle for
+   `destroy!`."
   [el {:keys [graph autoplay? controls?]}]
   (let [graph (desargues/assert-graph! graph)
         doc (.-ownerDocument el)
         compiled (timeline/compile-timeline graph)
+        marks (:marks compiled)
         browser-player (player/player (:duration compiled))
         state (player/state-atom browser-player)
         target (render/svg-target)
-        transport (when controls? (build-transport doc browser-player (:duration compiled)))
+        actions (when controls? (controls browser-player compiled))
+        transport (when controls? (build-transport doc browser-player (:duration compiled) actions))
+        key-listener (when controls? (fn [e] (on-key actions e)))
+        click-listener (when controls? (fn [e] (on-click el actions e)))
         svg (atom nil)
         render-frame! (fn [{:keys [t]}]
                         (let [frame (timeline/frame compiled t)
@@ -132,21 +212,29 @@
         watch-key (gensym "plato-scene")]
     (set! (.-innerHTML el) "")
     (when transport (.append el (:root transport)))
+    (when controls?
+      (.setAttribute el "tabindex" "0")
+      (.addEventListener el "keydown" key-listener)
+      (.addEventListener el "click" click-listener))
     (render-frame! @state)
-    (when transport (sync-transport! transport @state))
+    (when transport (sync-transport! transport marks @state))
     (add-watch state watch-key
                (fn [_ _ old new]
                  (when (not= (:t old) (:t new)) (render-frame! new))
-                 (when transport (sync-transport! transport new))))
+                 (when transport (sync-transport! transport marks new))))
     {:el el
      :player browser-player
      :watch-key watch-key
+     :listeners {"keydown" key-listener "click" click-listener}
      :stop-autoplay! (when autoplay? (play-when-visible! el browser-player))}))
 
 (defn destroy!
-  "Stop a mounted scene: playback, its frame watch and its wait for autoplay."
-  [{:keys [player watch-key stop-autoplay!]}]
+  "Stop a mounted scene: playback, its frame watch, its keys and clicks, and
+   its wait for autoplay."
+  [{:keys [el player watch-key listeners stop-autoplay!]}]
   (when stop-autoplay! (stop-autoplay!))
+  (doseq [[event listener] listeners :when listener]
+    (.removeEventListener el event listener))
   (when player
     (remove-watch (player/state-atom player) watch-key)
     (player/destroy! player)))
