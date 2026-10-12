@@ -3,7 +3,7 @@
 // in any viewer: one page per fragment step, Beamer page transitions mapped from
 // the deck's Reveal ones, links kept, speaker notes beside it.
 //
-//   node scripts/pdf.mjs dist/talk/index.html -o talk.pdf
+//   node resources/plato/pdf.mjs dist/talk/index.html -o talk.pdf
 //
 // Three legs, in an order that is not free:
 //   1. Chromium prints the page in Reveal's ?print-pdf mode.
@@ -16,10 +16,30 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
 
-const USAGE = `usage: node scripts/pdf.mjs <deck.html | deck-dir> [-o out.pdf]
+// This file ships inside plato, which a deck's repository pulls in as a library:
+// it may run from a checkout with node_modules beside it, or from a classpath
+// directory with none. Look for playwright beside the script, then in the
+// directory the command was run from, then wherever PLATO_NODE_MODULES says.
+async function playwright() {
+  try {
+    return await import('playwright');
+  } catch {
+    const roots = [process.cwd(), process.env.PLATO_NODE_MODULES].filter(Boolean);
+    for (const root of roots) {
+      try {
+        return createRequire(path.join(root, 'package.json'))('playwright');
+      } catch { /* next root */ }
+    }
+    throw new Error('playwright not found. In the directory you run plato from:\n' +
+                    '  npm install --save-dev playwright && npx playwright install chromium\n' +
+                    'or point PLATO_NODE_MODULES at a directory that has it in node_modules.');
+  }
+}
+
+const USAGE = `usage: node resources/plato/pdf.mjs <deck.html | deck-dir> [-o out.pdf]
   -o, --out <file>      output PDF (default: <deck>.pdf beside the page)
   --no-transitions      plain page cuts
   --no-compress         skip the Ghostscript leg
@@ -56,6 +76,7 @@ function run(bin, args, opts = {}) {
 // The npm playwright and the browsers in its cache drift apart; a deck should
 // still print with whichever Chromium is there.
 async function launch() {
+  const { chromium } = await playwright();
   if (process.env.CHROME_PATH) return chromium.launch({ executablePath: process.env.CHROME_PATH });
   try {
     return await chromium.launch();

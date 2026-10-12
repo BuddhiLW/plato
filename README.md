@@ -290,14 +290,22 @@ scene snapshots until something converts the SVG. See
 ## A PDF of the deck as the browser shows it
 
 The Beamer route above re-typesets the source, so it needs a Markdown or Org
-document and gives a Beamer-looking deck. `bb pdf` prints the *built page*
+document and gives a Beamer-looking deck. `plato pdf` prints the *built page*
 instead: the PDF is the browser deck, page for page, and it works for any deck,
 a hiccup one included.
 
 ~~~bash
-plato build talk.md -o dist/talk/index.html --assets public
-bb pdf dist/talk/index.html -o talk.pdf      # or: npm run pdf -- dist/talk/index.html -o talk.pdf
+plato pdf talk.md -o talk.pdf --tokens theme/acme.tokens.edn --assets public
+plato pdf --deck my.deck/model -o talk.pdf --tokens theme/my.tokens.edn --assets . --fit
+plato pdf dist/talk/index.html               # a page that is already built
 ~~~
+
+A source, or the deck a `--deck` var holds, is built first, into a scratch
+directory, with the same options `plato build` takes; `--assets <dir>` also
+brings `<dir>/assets`, the deck's pictures. A built page (an `.html` file, or a
+directory with an `index.html`) is printed as it stands. Either way the command
+is the same from any repository that depends on plato: the printer ships on
+plato's classpath.
 
 It writes three files:
 
@@ -323,11 +331,16 @@ A slide taller than its page is scaled down to fit, as `plato-fit` does on
 screen, and a box that scrolls on screen is opened first: paper cannot scroll.
 Video, audio and live scenes print as their current frame.
 
-It needs Chromium (`npx playwright install chromium`), a TeX install with Beamer,
-and optionally Ghostscript, which shrinks the images (`--dpi`, default 200;
-`--no-compress` to skip). LuaLaTeX is used when installed: it shares one copy of
-the fonts across pages, where pdfLaTeX repeats them on every page. `--no-transitions`
-gives plain cuts, and `--keep` leaves the work directory for inspection.
+JVM only, like `serve`: the native binary cannot start the browser. It needs
+Node with Playwright and its Chromium (`npm install --save-dev playwright && npx
+playwright install chromium`), a TeX install with Beamer, and optionally
+Ghostscript, which shrinks the images (`--dpi`, default 200; `--no-compress` to
+skip). Playwright is looked for beside plato, then in the directory the command
+runs from, then in `PLATO_NODE_MODULES`; `CHROME_PATH` names a Chromium to use
+instead of Playwright's own. LuaLaTeX is used when installed: it shares one copy
+of the fonts across pages, where pdfLaTeX repeats them on every page.
+`--no-transitions` gives plain cuts, and `--keep` leaves the work directories for
+inspection.
 
 ## Static export
 

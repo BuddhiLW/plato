@@ -1,10 +1,10 @@
-// The pure half of scripts/pdf.mjs: what a printed page's metadata becomes in
+// The pure half of resources/plato/pdf.mjs: what a printed page's metadata becomes in
 // the Beamer wrapper. The printing half needs a browser and is exercised by
 // running the script on a deck.
 //   node --test test/pdf.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { labelled, transitionOf, wrapper } from '../scripts/pdf.mjs';
+import { labelled, transitionOf, wrapper } from '../resources/plato/pdf.mjs';
 
 const page = (id, h, v, more = {}) => ({ id, h, v, transition: 'slide', notes: '', links: [], ...more });
 
