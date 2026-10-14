@@ -10,7 +10,8 @@
   (:require [clojure.string :as str]
             [plato.content :as content]
             [plato.doc :as doc]
-            [plato.source :as source]))
+            [plato.source :as source]
+            [plato.cite :as cite]))
 
 (def image-extensions #{"png" "jpg" "jpeg" "gif" "svg" "webp" "avif" "bmp"})
 (def video-extensions #{"mp4" "webm" "ogv" "mov" "m4v"})
@@ -116,10 +117,18 @@
 (defn- token
   "Inline token starting at index i, as [node next-index], or nil."
   [s i]
-  (if (at? s i "[[")
+  (cond
+    (at? s i "[[")
     (when-let [{:keys [target desc next]} (link-at s i)]
       (let [href (link-path target)]
         [(into [:a {:href href}] (if (str/blank? desc) [href] (inline desc))) next]))
+
+    (at? s i "[cite")
+    (when-let [[m body] (re-find #"^\[cite(?:/[\w/-]+)?:([^\]]*)\]" (subs s i))]
+      (when-let [citation (cite/from-text body)]
+        [citation (+ i (count m))]))
+
+    :else
     (when-let [{:keys [marker text next]} (emphasis-at s i)]
       [(if (verbatim-markers marker)
          [(markup-tags marker) text]
@@ -428,6 +437,9 @@
 
           (attr-opts line)
           (recur (next ls) blocks opts id (merge pending (attr-opts line)))
+
+          (= "PRINT_BIBLIOGRAPHY" (first (keyword-line line)))
+          (recur (next ls) (conj blocks (content/bibliography)) opts id {})
 
           (keyword-line line) (recur (next ls) blocks opts id pending)
 

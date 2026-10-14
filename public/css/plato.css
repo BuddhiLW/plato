@@ -389,6 +389,40 @@ html, body, #app {
 .plato-note-warn { --plato-tone: var(--plato-warn); }
 .plato-note-ok { --plato-tone: var(--plato-ok); }
 
+/* ── citations ──────────────────────────────────────────────────────────── */
+
+.plato-cite { white-space: nowrap; }
+.reveal .plato-cite-ref { text-decoration: none; }
+.reveal .plato-cite-ref:hover { text-decoration: underline; }
+.plato-cite-unresolved { color: var(--plato-warn); }
+
+.reveal .plato-bibliography {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.55em;
+  line-height: 1.45;
+  text-align: left;
+}
+.reveal .plato-bibliography > li {
+  position: relative;
+  margin: 0 0 0.6em;
+  padding-left: 2.6em;
+}
+.reveal .plato-bibliography > li::before {
+  content: "[" attr(value) "]";
+  position: absolute;
+  left: 0;
+  color: var(--plato-accent);
+  font-variant-numeric: tabular-nums;
+}
+.reveal .plato-bib-title { font-style: italic; }
+.plato-bib-venue,
+.plato-bib-year { color: var(--plato-muted); }
+.plato-bib-backrefs { color: var(--plato-muted); font-size: 0.85em; }
+.reveal .plato-bib-backrefs a { text-decoration: none; }
+
 /* ── escape hatches ─────────────────────────────────────────────────────── */
 
 .plato-html { width: 100%; }
