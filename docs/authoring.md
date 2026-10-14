@@ -90,6 +90,8 @@ multimethod. Content maps nested inside hiccup are expanded automatically:
 | `(content/fragment content opts)` | `:effect :index` |
 | `(content/note content opts)` | `:tone :info/:warn/:ok`, `:title` |
 | `(content/kicker text)` | small uppercase label |
+| `(content/cite keys opts)` | numbered citation link; `:prefix :note` (see §4c) |
+| `(content/bibliography)` | where the reference list goes (see §4c) |
 | `(content/markdown text)` | Markdown parsed by the Reveal plugin at display time |
 | `(content/html source)` | raw HTML |
 
@@ -222,6 +224,67 @@ extensions, and a front end declares itself the way a content kind does:
 Require that namespace and `plato build talk.tex` works. `plato.source/known-extensions` is the
 registry as data, and an extension registered with no method is caught by the test suite rather than
 by a user.
+
+## 4c. Citations
+
+Citations work the way `\cite` and `\bibliography` do in LaTeX. Each one renders as a numbered link,
+`[1]`, that jumps to the reference list. Numbers follow the order of first citation, as BibTeX's
+`unsrt` style numbers them, and entries nobody cites are left out. Each entry in the list links back
+to the slides that cite it, and its title links to the work through its `url` or `doi`.
+
+~~~markdown
+---
+title: Literate decks
+bibliography: refs.bib
+---
+
+# Why
+
+Programs are written for people to read [@sicp, p. xvii].
+Weave and tangle are one idea [see @knuth84; @sicp].
+~~~
+
+~~~org
+#+TITLE: Literate decks
+#+BIBLIOGRAPHY: refs.bib
+
+* Why
+
+Programs are written for people to read [cite:@sicp, p. xvii].
+Weave and tangle are one idea [cite:see @knuth84;@sicp].
+~~~
+
+| Construct | Meaning |
+| --- | --- |
+| `[@key]`, `[@a; @b]` (Markdown) / `[cite:@key]`, `[cite:@a;@b]` (Org) | a citation of one work or several |
+| `[see @key, p. 3]` / `[cite:see @key, p. 3]` | text before the first key is a prefix, text after the last a locator |
+| `bibliography: refs.bib` / `#+BIBLIOGRAPHY: refs.bib` | the bibliography file, relative to the source; separate several with commas |
+| `::: {#refs}` (Markdown) / `#+PRINT_BIBLIOGRAPHY:` (Org) | put the reference list on this slide |
+| `references-title: Referências` | heading of the appended reference slides |
+
+The file is BibTeX (`.bib`) or EDN (`.edn`, a map of key to fields). The BibTeX reader handles
+`@string` macros and `#` concatenation, skips `@comment` and `@preamble`, composes accents such as
+`{\"o}` into one character, and reorders `Last, First` names. A braced `{Barnes and Noble}` stays
+one name, and a trailing `and others` becomes *et al.*
+
+With no placement marker, the list goes on slides appended to the deck: `references`,
+`references-2`, and so on, six entries to a slide. A citation links to the slide that lists its entry.
+
+From Clojure, the same thing is data:
+
+~~~clojure
+(deck/deck
+ {:bibliography (bib/parse-bibtex (slurp "refs.bib"))   ; or {:knuth84 {:author "…" :title "…"}}
+  :references   {:title "Works cited" :per-slide 8}
+  :slides [(deck/slide :why [:p "Read me " (content/cite :sicp {:note "p. xvii"})])
+           (deck/slide :refs (content/bibliography))]})
+~~~
+
+`content/cite` takes a key or a vector of keys, plus `:prefix` and `:note`. `content/bibliography`
+marks where the list goes. A citation of a key the bibliography lacks fails the build and names the
+slide that cites it. A deck that names a bibliography file nobody has read yet (for example,
+`markdown/->deck` called without one) keeps its citations as `[?]`, and the CLI resolves them when it
+reads the file. To supply the bibliography yourself, use `(markdown/->deck text {:bibliography refs})`.
 
 ## 5. Theming
 

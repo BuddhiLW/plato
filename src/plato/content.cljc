@@ -294,6 +294,43 @@
 
 (defmethod render :kicker [{:keys [text]}] [:div.plato-kicker text])
 
+;; ── citations ───────────────────────────────────────────────────────────────
+
+(defn cite
+  "Citation of one bibliography key or several. The deck's citation pass
+   (plato.cite) numbers it and links it to the reference list; unresolved, it
+   renders as [?]. opts: :prefix (\"see\") :note (a locator, \"p. 3\") :class."
+  ([keys] (cite keys {}))
+  ([keys opts]
+   (merge {:plato/type :cite
+           :keys (if (sequential? keys) (vec keys) [keys])}
+          opts)))
+
+(defn- cite-ref [{:keys [n key href title]}]
+  (if n
+    [:a.plato-cite-ref {:href href :title title :data-cite (name key)} (str n)]
+    [:span.plato-cite-ref.plato-cite-unresolved {:title (name key)} "?"]))
+
+(defmethod render :cite [{:keys [keys refs prefix note class]}]
+  (into [:span.plato-cite {:class class}]
+        (concat ["["]
+                (when prefix [prefix " "])
+                (interpose ", " (map cite-ref (or refs (map (fn [k] {:key k}) keys))))
+                (when note [", " note])
+                ["]"])))
+
+(defn bibliography
+  "Where the reference list goes. The citation pass fills it; a deck without
+   one gets reference slides appended instead. opts: :class."
+  ([] (bibliography {}))
+  ([opts] (merge {:plato/type :bibliography} opts)))
+
+(defmethod render :bibliography [{:keys [entries class]}]
+  (into [:ol.plato-bibliography {:class class}]
+        (map (fn [{:keys [n key body backrefs]}]
+               [:li {:id (str "ref-" (name key)) :value n} body backrefs]))
+        entries))
+
 ;; ── escape hatches ──────────────────────────────────────────────────────────
 
 (defn markdown

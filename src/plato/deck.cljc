@@ -1,4 +1,5 @@
-(ns plato.deck)
+(ns plato.deck
+  (:require [plato.cite :as cite]))
 
 (def reveal-data-keys
   "Slide options passed through to Reveal as data- attributes, in the order
@@ -145,8 +146,18 @@
                    [(:id entry)]))
                entries)))
 
+(defn- citations
+  "Citation-pass options a deck spec declares. A :bibliography named in :meta
+   (a file a front end saw but could not read) leaves citations pending."
+  [{:keys [bibliography references meta]}]
+  {:bibliography bibliography
+   :references (cond-> (or references {})
+                 (and (:references-title meta) (not (:title references)))
+                 (assoc :title (:references-title meta)))
+   :pending? (some? (:bibliography meta))})
+
 (defn deck [{:keys [slides config] :as spec}]
-  (let [slides (vec slides)
+  (let [slides (cite/resolve-slides (vec slides) (citations spec))
         model (assoc spec
                      :plato/type :deck
                      :slides slides

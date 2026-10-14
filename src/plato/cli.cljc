@@ -22,7 +22,8 @@
             #?(:clj [clojure.java.io :as io])
             [plato.json :as json]
             [plato.spec :as spec]
-            [plato.cli.usage :as usage]))
+            [plato.cli.usage :as usage]
+            [plato.bib :as bib]))
 
 (def usage
   "What `plato help` prints, and what follows a bad command line."
@@ -428,18 +429,38 @@
              (when-let [^java.io.File parent (.getParentFile dest)] (.mkdirs parent))
              (io/copy f dest)))))))
 
+(defn- with-bibliography
+  "`model` with the bibliography files its :meta names read, each resolved
+   against the source file `input`. A deck that already carries a
+   :bibliography, or names no file, comes back as it is."
+  [model input]
+  (let [files (bib/paths (get-in model [:meta :bibliography]))]
+    (if (or (empty? files) (some? (:bibliography model)))
+      model
+      (deck/deck
+       (assoc model :bibliography
+              (into {}
+                    (map (fn [file]
+                           (let [path (if input (relative-to input file) file)]
+                             (bib/read-bibliography path (read-source path)))))
+                    files))))))
+
 (defn deck-job
   "Read everything a deck job needs: the source text at `input` (or the deck
-   the --deck var holds) and the theme chain --tokens names. The one I/O step
-   before build-job and hyperframes-job, so the dev server can repeat it on
-   every request."
+   the --deck var holds), the bibliography files that deck names, and the
+   theme chain --tokens names. The one I/O step before build-job and
+   hyperframes-job, so the dev server can repeat it on every request."
   [input opts]
-  {:input input
-   :text (when-not (:deck opts) (read-source input))
-   :model (when (:deck opts) (deck-from-var (:deck opts)))
-   :opts opts
-   :token-maps (when (:tokens opts)
-                 (token-chain (:tokens opts)))})
+  (let [text (when-not (:deck opts) (read-source input))
+        model (if (:deck opts)
+                (deck-from-var (:deck opts))
+                (source-model {:input input :text text}))]
+    {:input input
+     :text text
+     :model (with-bibliography model input)
+     :opts opts
+     :token-maps (when (:tokens opts)
+                   (token-chain (:tokens opts)))}))
 
 (defn- run-job
   "Read the sources a parsed command needs, run the pure job, write its files."

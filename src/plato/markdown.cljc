@@ -9,7 +9,8 @@
             [plato.content :as content]
             [plato.doc :as doc]
             [plato.text :as text]
-            [plato.source :as source]))
+            [plato.source :as source]
+            [plato.cite :as cite]))
 
 (def video-extensions #{"mp4" "webm" "ogv" "mov" "m4v"})
 (def audio-extensions #{"mp3" "wav" "ogg" "m4a" "flac"})
@@ -138,6 +139,11 @@
     (when-let [{:keys [label dest next]} (link-at s (inc i))]
       (let [[src title] (destination dest)]
         [[:img (cond-> {:src src :alt label} title (assoc :title title))] next]))
+
+    (and (at? s i "[") (not (link-at s i)))
+    (when-let [close (str/index-of s "]" i)]
+      (when-let [citation (cite/from-text (subs s (inc i) close))]
+        [citation (inc close)]))
 
     (at? s i "[")
     (when-let [{:keys [label dest next]} (link-at s i)]
@@ -280,6 +286,11 @@
           (audio-extensions ext) (content/audio src opts)
           :else (content/image src (cond-> opts (seq alt) (assoc :alt alt))))))))
 
+(defn- refs-line?
+  "True for pandoc's `::: {#refs}`, which places the reference list."
+  [line]
+  (boolean (and (string? line) (re-matches #"\s*:::\s*\{\s*#refs\s*\}\s*(:::)?\s*" line))))
+
 (defn- block-opener?
   "True when `line` cannot continue a paragraph."
   [line]
@@ -293,6 +304,7 @@
                (quote-text line)
                (note-text line)
                (slide-attrs line)
+               (refs-line? line)
                (media-block line))))
 
 ;; ── blocks ──────────────────────────────────────────────────────────────────
@@ -377,6 +389,11 @@
 
           (slide-attrs line)
           (recur (next ls) blocks (merge opts (slide-attrs line)))
+
+          (refs-line? line)
+          (recur (cond-> (next ls) (re-matches #"\s*:::\s*" (str (second ls))) next)
+                 (conj blocks (content/bibliography))
+                 opts)
 
           (note-text line)
           {:blocks blocks
